@@ -31,9 +31,6 @@ RUN apk add --no-cache \
 
 COPY --from=tofu-downloader /tofu /usr/local/bin/tofu
 
-RUN addgroup -S ci && adduser -S ci -G ci
-USER ci
-
 WORKDIR /workspace
 
 # OCI Labels
