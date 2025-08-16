@@ -63,6 +63,7 @@ jobs:
           push: true
           build-args: |
             TOFU_VERSION=${{ env.TOFU_VERSION }}
+            VERSION=${{ env.VERSION }}
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
