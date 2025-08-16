@@ -9,15 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl tar \
  && rm -rf /var/lib/apt/lists/*
 
-  RUN set -eux; \
-  case "$TARGETARCH" in \
-    amd64) A="amd64" ;; \
-    arm64) A="arm64" ;; \
-    *) echo "Arch not supported: $TARGETARCH" && exit 1 ;; \
-  esac; \
-  curl -fsSL -o /tmp/tofu.tgz \
-    "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_${A}.tar.gz"; \
-  tar -xzf /tmp/tofu.tgz -C /usr/local/bin tofu; 
+RUN set -eux; \
+case "$TARGETARCH" in \
+  amd64) A="amd64" ;; \
+  arm64) A="arm64" ;; \
+  *) echo "Arch not supported: $TARGETARCH" && exit 1 ;; \
+esac; \
+curl -fsSL -o /tmp/tofu.tgz \
+  "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_${A}.tar.gz"; \
+tar -xzf /tmp/tofu.tgz -C /usr/local/bin tofu; 
 
 # =========================
 # Stage 2: CI 
