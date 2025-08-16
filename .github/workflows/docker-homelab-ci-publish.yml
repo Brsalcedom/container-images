@@ -1,21 +1,24 @@
-name: "Docker :: homelab-ci Build & Publish"
+name: "Docker :: homelab-ci (manual)"
 
 on:
-  push:
-    branches: ["main"]
-    tags: ["v*.*.*"]
-    paths:
-      - "images/homelab-ci/**"
-  pull_request:
-    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      tags:
+        type: string
+        required: true
+        description: "Semantic version to publish (e.g. v1.0.0)"
+      image:
+        type: choice
+        required: true
+        description: "Image to build"
+        options:
+          - "homelab-ci"
 
 permissions:
   contents: read
-  id-token: write
 
 env:
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/homelab-ci
-  TOFU_VERSION: "1.10.3"
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image }}
 
 jobs:
   build-and-push:
@@ -36,29 +39,36 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract meta (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' }}
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+      - name: Parse version
+        id: ver
+        shell: bash
+        run: |
+          RAW="${{ inputs.tags }}"
+          # quita prefijo 'v' si viene
+          VERSION="${RAW#v}"
+          MAJOR="${VERSION%%.*}"
+          MINOR="${VERSION%.*}"
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "MAJOR=$MAJOR"     >> "$GITHUB_ENV"
+          echo "MINOR=$MINOR"     >> "$GITHUB_ENV"
+          # si tu Dockerfile usa ARG TOFU_VERSION esperando '1.2.3'
+          echo "TOFU_VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build & Push
         uses: docker/build-push-action@v6
         with:
-          context: images/homelab-ci/
-          file: ./Dockerfile
+          context: ./images/homelab-ci/
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           build-args: |
             TOFU_VERSION=${{ env.TOFU_VERSION }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+            ${{ env.IMAGE_NAME }}:${{ env.MINOR }}
+            ${{ env.IMAGE_NAME }}:${{ env.MAJOR }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
