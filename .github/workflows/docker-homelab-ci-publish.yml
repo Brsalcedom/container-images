@@ -19,6 +19,7 @@ permissions:
 
 env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image }}
+  TOFU_VERSION: "1.10.3"
 
 jobs:
   build-and-push:
@@ -52,8 +53,6 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "MAJOR=$MAJOR"     >> "$GITHUB_ENV"
           echo "MINOR=$MINOR"     >> "$GITHUB_ENV"
-          # si tu Dockerfile usa ARG TOFU_VERSION esperando '1.2.3'
-          echo "TOFU_VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build & Push
         uses: docker/build-push-action@v6
