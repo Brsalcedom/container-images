@@ -30,6 +30,10 @@ curl -fsSL -o /usr/local/bin/kubectl \
   "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${A}/kubectl"; \
 chmod +x /usr/local/bin/kubectl;
 
+RUN set -eux; \
+curl -fsSL https://taskfile.dev/install.sh | sh; \
+mv bin/task /usr/local/bin/task; 
+
 # =========================
 # Stage 2: CI 
 # =========================
@@ -41,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=downloader /usr/local/bin/tofu /usr/local/bin/tofu
 COPY --from=downloader /usr/local/bin/kubectl /usr/local/bin/kubectl
+COPY --from=downloader /usr/local/bin/task /usr/local/bin/task
 
 ARG VERSION="dev"
 LABEL org.opencontainers.image.title="homelab-ci (ci)" \
