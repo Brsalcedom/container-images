@@ -1,0 +1,180 @@
+name: "Security :: Gate"
+
+on:
+  pull_request:
+    paths:
+      - 'images/**'
+      - '.github/workflows/security-gate.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TOFU_VERSION: "1.10.3"
+
+jobs:
+  gate:
+    name: "Security Gate Check"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine image to scan
+        id: image
+        run: |
+          CHANGED_IMAGES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} | grep '^images/' | cut -d'/' -f2 | sort -u)
+          if [ -z "$CHANGED_IMAGES" ]; then
+            echo "IMAGE=" >> $GITHUB_OUTPUT
+          else
+            IMAGE=$(echo "$CHANGED_IMAGES" | head -n1)
+            echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if image was detected
+        id: check
+        run: |
+          if [ -z "${{ steps.image.outputs.IMAGE }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "✅ No image changes detected, skipping security gate"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "🔍 Checking security gate for: ${{ steps.image.outputs.IMAGE }}"
+          fi
+
+      - name: Build image for scanning
+        if: steps.check.outputs.skip == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./images/${{ steps.image.outputs.IMAGE }}/Dockerfile
+          load: true
+          build-args: |
+            TOFU_VERSION=${{ env.TOFU_VERSION }}
+            VERSION=gate-check
+          tags: |
+            gate-target:latest
+          cache-from: type=gha
+
+      - name: Run Trivy for CRITICAL vulnerabilities
+        if: steps.check.outputs.skip == 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'gate-target:latest'
+          format: 'json'
+          output: 'gate-results.json'
+          severity: 'CRITICAL'
+          exit-code: '0'
+
+      - name: Count CRITICAL vulnerabilities
+        if: steps.check.outputs.skip == 'false'
+        id: count
+        run: |
+          if [ -f gate-results.json ]; then
+            CRITICAL_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' gate-results.json)
+            echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+            echo "Found $CRITICAL_COUNT CRITICAL vulnerabilities"
+          else
+            echo "critical_count=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR
+        if: steps.check.outputs.skip == 'false' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const criticalCount = '${{ steps.count.outputs.critical_count }}';
+            
+            let comment = '## 🚦 Security Gate Status\n\n';
+            comment += `**Image:** \`${{ steps.image.outputs.IMAGE }}\`\n\n`;
+            
+            if (criticalCount === '0') {
+              comment += '### ✅ Security Gate: PASSED\n\n';
+              comment += 'No CRITICAL vulnerabilities detected. This PR can be merged.\n\n';
+            } else {
+              comment += '### ❌ Security Gate: BLOCKED\n\n';
+              comment += `**${criticalCount} CRITICAL vulnerabilities detected.**\n\n`;
+              comment += 'This PR cannot be merged until all CRITICAL vulnerabilities are resolved.\n\n';
+              
+              if (fs.existsSync('gate-results.json')) {
+                const results = JSON.parse(fs.readFileSync('gate-results.json', 'utf8'));
+                const vulns = results.Results?.[0]?.Vulnerabilities || [];
+                
+                if (vulns.length > 0) {
+                  comment += '#### Critical Vulnerabilities:\n\n';
+                  vulns.slice(0, 5).forEach(v => {
+                    comment += `- **${v.VulnerabilityID}**: ${v.Title || 'N/A'}\n`;
+                    comment += `  - Package: \`${v.PkgName}@${v.InstalledVersion}\`\n`;
+                    if (v.FixedVersion) {
+                      comment += `  - Fixed in: \`${v.FixedVersion}\`\n`;
+                    }
+                    comment += '\n';
+                  });
+                }
+              }
+              
+              comment += '#### 🔧 How to fix:\n\n';
+              comment += '1. Update base image to latest stable version\n';
+              comment += '2. Update vulnerable packages in Dockerfile\n';
+              comment += '3. Review the Security Report workflow for detailed CVE information\n';
+            }
+            
+            comment += '\n---\n';
+            comment += '💡 **Tip:** Check the [Security Report](../actions/workflows/security-report.yml) workflow for detailed vulnerability information.\n';
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('🚦 Security Gate Status')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+
+      - name: Security Gate Decision
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          CRITICAL_COUNT=${{ steps.count.outputs.critical_count }}
+          
+          if [ "$CRITICAL_COUNT" != "0" ]; then
+            echo "::error title=Security Gate Failed::$CRITICAL_COUNT CRITICAL vulnerabilities detected"
+            echo ""
+            echo "❌ Security Gate: BLOCKED"
+            echo ""
+            echo "This PR cannot be merged due to $CRITICAL_COUNT CRITICAL vulnerabilities."
+            echo ""
+            echo "Please fix the vulnerabilities and push new changes."
+            echo "The security gate will automatically re-run."
+            exit 1
+          else
+            echo "✅ Security Gate: PASSED"
+            echo ""
+            echo "No CRITICAL vulnerabilities detected."
+            echo "This PR can be merged."
+          fi
