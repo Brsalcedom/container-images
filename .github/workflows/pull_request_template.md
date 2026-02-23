@@ -1,9 +1,5 @@
 # 🚀 Pull Request
 
-## 📌 Summary
-
-<!-- Briefly describe what this PR introduces or changes. -->
-
 ## 🔖 PR Type
 
 Select the appropriate type:
@@ -17,3 +13,8 @@ Select the appropriate type:
 - [ ] ⬆️ Dependency Update
 - [ ] 🚀 Performance Improvement
 - [ ] 🧹 Code Cleanup
+
+
+## 📌 Summary
+
+<!-- Briefly describe what this PR introduces or changes. -->
