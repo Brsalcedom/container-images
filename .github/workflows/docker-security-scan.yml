@@ -130,6 +130,52 @@ jobs:
           path: sbom.json
           retention-days: 7
 
+      - name: Generate scan summary
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          echo "## 🔍 Trivy Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.image.outputs.IMAGE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f trivy-results.json ]; then
+            # Parse JSON results
+            CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json)
+            HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json)
+            MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json)
+            
+            echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 🔴 CRITICAL | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟠 HIGH | $HIGH |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟡 MEDIUM | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "### ⚠️ CRITICAL Vulnerabilities Found" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**This build should NOT be merged until critical vulnerabilities are resolved.**" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              
+              # List first 5 critical vulnerabilities
+              jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | "- **\(.VulnerabilityID)**: \(.Title // "N/A")\n  - Package: `\(.PkgName)@\(.InstalledVersion)`\n  - Fixed in: `\(.FixedVersion // "N/A")`\n"' trivy-results.json | head -n 20 >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ✅ No Critical Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "The image passed the security scan with no critical issues." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ✅ Clean Scan" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No vulnerabilities detected." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "Full results available in the [Security tab](../security/code-scanning)." >> $GITHUB_STEP_SUMMARY
+
       - name: Comment PR with scan results
         if: github.event_name == 'pull_request' && steps.check.outputs.skip == 'false'
         uses: actions/github-script@v7
