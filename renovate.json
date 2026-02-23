@@ -2,5 +2,56 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
-  ]
+  ],
+  "docker": {
+    "enabled": true,
+    "pinDigests": true
+  },
+  "dockerfile": {
+    "enabled": true
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "dependencies"]
+  },
+  "packageRules": [
+    {
+      "description": "Docker base images - auto-merge patch updates",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "automerge": false,
+      "labels": ["dependencies", "docker", "automerge-candidate"],
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Docker base images - minor updates require review",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor"],
+      "automerge": false,
+      "labels": ["dependencies", "docker"],
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Docker base images - major updates require careful review",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "docker", "major-update"],
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "Security updates - high priority",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "vulnerabilitySeverity": "high",
+      "labels": ["security", "dependencies", "high-priority"],
+      "schedule": ["at any time"]
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "timezone": "America/Santiago",
+  "labels": ["renovate"],
+  "assignees": [],
+  "reviewers": []
 }
