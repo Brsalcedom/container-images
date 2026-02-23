@@ -110,9 +110,20 @@ jobs:
           format: 'json'
           output: 'trivy-results.json'
           severity: 'CRITICAL'
-          exit-code: '1'
-        continue-on-error: true
+          exit-code: '0'  # No fallar, solo reportar
         id: critical-check
+
+      - name: Count CRITICAL vulnerabilities
+        if: steps.check.outputs.skip == 'false'
+        id: count-vulns
+        run: |
+          if [ -f trivy-results.json ]; then
+            CRITICAL_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json)
+            echo "critical_count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+            echo "Found $CRITICAL_COUNT CRITICAL vulnerabilities"
+          else
+            echo "critical_count=0" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate SBOM
         if: steps.check.outputs.skip == 'false'
@@ -230,15 +241,20 @@ jobs:
             });
 
       - name: Fail if CRITICAL vulnerabilities found
-        if: steps.check.outputs.skip == 'false' && steps.critical-check.outcome == 'failure'
+        if: steps.check.outputs.skip == 'false' && steps.count-vulns.outputs.critical_count != '0'
         run: |
+          echo "::error title=Security Scan Failed::CRITICAL vulnerabilities detected in ${{ steps.image.outputs.IMAGE }}"
+          echo ""
           echo "❌ CRITICAL vulnerabilities detected!"
           echo "This PR cannot be merged until vulnerabilities are resolved."
           echo ""
-          echo "Options to fix:"
-          echo "1. Update base image to a newer version"
+          echo "📊 Check the workflow summary above for detailed vulnerability information."
+          echo ""
+          echo "🔧 Options to fix:"
+          echo "1. Update base image to a newer version (e.g., alpine:3.22 → alpine:3.23)"
           echo "2. Update vulnerable packages in Dockerfile"
           echo "3. Apply security patches"
+          echo "4. Review the Security tab for detailed CVE information"
           echo ""
           echo "See the scan results above for details."
           exit 1
