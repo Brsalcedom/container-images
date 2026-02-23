@@ -1,0 +1,159 @@
+name: "Security :: Report"
+
+on:
+  pull_request:
+    paths:
+      - 'images/**'
+      - '.github/workflows/security-report.yml'
+  workflow_dispatch:
+    inputs:
+      image:
+        type: choice
+        required: true
+        description: "Image to scan"
+        options:
+          - "homelab-ci"
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  TOFU_VERSION: "1.10.3"
+
+jobs:
+  report:
+    name: "Generate Security Report"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine image to scan
+        id: image
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "IMAGE=${{ inputs.image }}" >> $GITHUB_OUTPUT
+          else
+            CHANGED_IMAGES=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} | grep '^images/' | cut -d'/' -f2 | sort -u)
+            if [ -z "$CHANGED_IMAGES" ]; then
+              echo "IMAGE=" >> $GITHUB_OUTPUT
+            else
+              IMAGE=$(echo "$CHANGED_IMAGES" | head -n1)
+              echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Check if image was detected
+        id: check
+        run: |
+          if [ -z "${{ steps.image.outputs.IMAGE }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "No image to scan, skipping..."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Scanning image: ${{ steps.image.outputs.IMAGE }}"
+          fi
+
+      - name: Build image for scanning
+        if: steps.check.outputs.skip == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./images/${{ steps.image.outputs.IMAGE }}/Dockerfile
+          load: true
+          build-args: |
+            TOFU_VERSION=${{ env.TOFU_VERSION }}
+            VERSION=scan-test
+          tags: |
+            scan-target:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner (SARIF)
+        if: steps.check.outputs.skip == 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'scan-target:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Upload Trivy results to GitHub Security
+        if: steps.check.outputs.skip == 'false'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'container-security'
+
+      - name: Run Trivy vulnerability scanner (JSON)
+        if: steps.check.outputs.skip == 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'scan-target:latest'
+          format: 'json'
+          output: 'trivy-results.json'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+
+      - name: Generate SBOM
+        if: steps.check.outputs.skip == 'false'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'scan-target:latest'
+          format: 'cyclonedx'
+          output: 'sbom.json'
+        continue-on-error: true
+
+      - name: Upload SBOM artifact
+        if: steps.check.outputs.skip == 'false' && hashFiles('sbom.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ steps.image.outputs.IMAGE }}
+          path: sbom.json
+          retention-days: 7
+
+      - name: Generate scan summary
+        if: steps.check.outputs.skip == 'false' && hashFiles('trivy-results.json') != ''
+        run: |
+          echo "## 🔍 Security Scan Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.image.outputs.IMAGE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f trivy-results.json ]; then
+            CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-results.json)
+            HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-results.json)
+            MEDIUM=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="MEDIUM")] | length' trivy-results.json)
+            
+            echo "### Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 🔴 CRITICAL | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟠 HIGH | $HIGH |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🟡 MEDIUM | $MEDIUM |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "### ⚠️ CRITICAL Vulnerabilities Detected" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Note:** The Security Gate workflow will block this PR from merging." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              
+              jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | "- **\(.VulnerabilityID)**: \(.Title // "N/A")\n  - Package: `\(.PkgName)@\(.InstalledVersion)`\n  - Fixed in: `\(.FixedVersion // "N/A")`\n"' trivy-results.json | head -n 20 >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ✅ No Critical Vulnerabilities" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "The image passed the security scan with no critical issues." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Full results available in the [Security tab](../security/code-scanning)" >> $GITHUB_STEP_SUMMARY
+          echo "📦 SBOM artifact available for download" >> $GITHUB_STEP_SUMMARY

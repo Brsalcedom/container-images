@@ -19,7 +19,8 @@ main
 - [x] Require branches to be up to date before merging
 
 **Required status checks:**
-- `scan` (from `Docker :: Security Scan` workflow)
+- `Security Gate Check` (from `Security :: Gate` workflow) - **REQUIRED**
+- `Generate Security Report` (from `Security :: Report` workflow) - Optional but recommended
 
 #### ✅ Require conversation resolution before merging
 - [x] All conversations on code must be resolved
@@ -32,11 +33,12 @@ main
 ## How it works
 
 1. Developer creates PR with Dockerfile changes
-2. `docker-security-scan.yml` workflow runs automatically
-3. Trivy scans the image for vulnerabilities
-4. If CRITICAL vulnerabilities found → PR is blocked ❌
-5. If scan passes → PR can be merged ✅
-6. After merge, manually trigger `docker-homelab-ci-publish.yml` to publish
+2. Two workflows run automatically:
+   - **Security Report**: Scans and uploads results to Security tab (always succeeds)
+   - **Security Gate**: Checks for CRITICAL vulnerabilities and blocks if found
+3. If CRITICAL vulnerabilities found → Security Gate fails, PR is blocked ❌
+4. If scan passes → Both workflows succeed, PR can be merged ✅
+5. After merge, manually trigger `docker-homelab-ci-publish.yml` to publish
 
 ---
 
@@ -46,7 +48,8 @@ main
 2. Click "Add rule"
 3. Enter `main` as branch name pattern
 4. Enable the checkboxes listed above
-5. In "Status checks that are required", search for and add: `scan`
+5. In "Status checks that are required", search for and add: `Security Gate Check`
+6. Optionally add: `Generate Security Report` (informational only)
 6. Click "Create" or "Save changes"
 
 ---

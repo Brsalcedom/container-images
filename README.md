@@ -51,24 +51,46 @@ This command will start a shell session inside the container. The container runs
 
 All container images in this repository are automatically scanned for vulnerabilities using [Trivy](https://github.com/aquasecurity/trivy) before being published.
 
+### Security Workflows
+
+This repository uses two separate workflows for security:
+
+1. **Security Report** (`security-report.yml`)
+   - Runs on every PR that modifies images
+   - Generates SARIF reports for GitHub Security tab
+   - Creates SBOM (Software Bill of Materials)
+   - Always succeeds (never blocks PRs)
+   - Provides detailed vulnerability information
+
+2. **Security Gate** (`security-gate.yml`)
+   - Runs on every PR that modifies images
+   - Blocks PRs with CRITICAL vulnerabilities
+   - Comments on PR with gate status
+   - Must pass for PR to be mergeable
+
 ### Security Scanning Process
 
-1. **Automated PR Scans**: Every pull request that modifies image files triggers an automatic security scan
+1. **Automated PR Scans**: Every pull request that modifies image files triggers both security workflows
 2. **Vulnerability Detection**: Trivy scans for CRITICAL, HIGH, and MEDIUM severity vulnerabilities
-3. **Merge Protection**: PRs with CRITICAL vulnerabilities are automatically blocked from merging
+3. **Merge Protection**: PRs with CRITICAL vulnerabilities are automatically blocked by the Security Gate
 4. **SARIF Reports**: Scan results are uploaded to GitHub Security tab for tracking
 5. **SBOM Generation**: Software Bill of Materials (SBOM) is generated in CycloneDX format for compliance
 
 ### Scan Results
 
 Security scan results are available in:
-- **PR Comments**: Automated comments show vulnerability summary
-- **GitHub Security Tab**: Detailed SARIF reports with CVE information
+- **PR Comments**: Security Gate posts status and summary
+- **GitHub Security Tab**: Detailed SARIF reports with CVE information (from Security Report workflow)
+- **Workflow Summaries**: Both workflows provide detailed summaries
 - **Workflow Artifacts**: SBOM files are stored for 7 days
 
 ### Branch Protection
 
-The `main` branch is protected with required status checks. See [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md) for configuration details.
+The `main` branch is protected with required status checks:
+- `Security Gate Check` - Must pass (no CRITICAL vulnerabilities)
+- `Generate Security Report` - Informational only
+
+See [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md) for configuration details.
 
 ### Manual Security Scan
 
