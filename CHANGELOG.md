@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/Brsalcedom/container-images/compare/v2.4.0...v2.4.1) (2026-02-23)
+
+
+### Performance Improvements
+
+* isolate workflows ([#24](https://github.com/Brsalcedom/container-images/issues/24)) ([df63add](https://github.com/Brsalcedom/container-images/commit/df63add8004dc0626e9cba890434acb3912adeac))
+
 ## [2.4.0](https://github.com/Brsalcedom/container-images/compare/v2.3.0...v2.4.0) (2026-02-23)
 
 
