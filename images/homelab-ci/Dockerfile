@@ -40,7 +40,7 @@ mv bin/task /usr/local/bin/task;
 FROM debian:trixie-slim AS ci
 WORKDIR /workspace
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl git openssh-client \
+      ca-certificates curl git openssh-client gettext-base \
   && update-ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=downloader /usr/local/bin/tofu /usr/local/bin/tofu
