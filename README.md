@@ -27,7 +27,7 @@ images.yml                  # target registries + build settings (platforms, smo
 .release-please-manifest.json  # current version of each image
 release-please-config.json  # one release-please package per image
 scripts/go-bump.sh          # bumps vulnerable Go dependencies when building tools
-.github/scripts/            # plan.sh (which images to process), scan.sh (gate), publish.sh
+.github/scripts/            # plan.sh (which images to process), metadata.sh, scan.sh (gate), publish.sh
 .trivyignore.yaml           # CVE exceptions, with justification and expiry
 .hadolint.yaml              # Dockerfile lint rules
 AGENTS.md                   # guidelines for contributors and AI agents
@@ -120,3 +120,21 @@ step in the workflow.
 3. Open the PR. The initial version is published on merge.
 
 See [AGENTS.md](AGENTS.md) for conventions on commits, PRs and Dockerfiles.
+
+## Image metadata
+
+Every image carries the same metadata in every registry:
+
+* **OCI labels** from the Dockerfile (`title`, `description`, `source`, `authors`,
+  `licenses`) plus `version`, `revision`, `created`, `url` and `documentation` added
+  by the pipeline. The main ones are also set as **index annotations**, which is where
+  GHCR reads the description and license of multi-arch images.
+* **Attestations**: SLSA provenance (`mode=max`) and an SPDX SBOM (except
+  `pentesting`, whose SBOM exceeds BuildKit's size limit).
+* **Docker Hub**: the image README as the full description and the `description`
+  label as the short description.
+
+## License
+
+[MIT](LICENSE), for the contents of this repository (Dockerfiles, scripts and
+configuration). The software installed in each image keeps its own license.

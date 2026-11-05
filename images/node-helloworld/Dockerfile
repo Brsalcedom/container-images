@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.title="node-helloworld" \
       org.opencontainers.image.description="Node.js/Express Hello World for testing" \
       org.opencontainers.image.source="https://github.com/Brsalcedom/container-images" \
       org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>" \
-      org.opencontainers.image.licenses="ISC"
+      org.opencontainers.image.licenses="MIT"
 
 RUN apk add --no-cache libstdc++ libatomic \
     && addgroup -S -g 1000 node \

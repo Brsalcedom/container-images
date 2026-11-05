@@ -76,6 +76,7 @@ FROM debian:trixie-slim AS ci
 LABEL org.opencontainers.image.title="homelab-ci" \
       org.opencontainers.image.description="CI image with OpenTofu, kubectl, Task, git, curl, ssh and envsubst" \
       org.opencontainers.image.source="https://github.com/Brsalcedom/container-images" \
+      org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>" \
       org.opencontainers.image.licenses="MIT"
 
 # Non-root user `ci` (1000:1000) that owns /workspace. Numeric UID in USER so that

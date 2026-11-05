@@ -106,7 +106,8 @@ FROM alpine:3.24
 LABEL org.opencontainers.image.title="kubetools" \
       org.opencontainers.image.description="Lightweight CLI toolbox for Kubernetes, AWS and GCP" \
       org.opencontainers.image.source="https://github.com/Brsalcedom/container-images" \
-      org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>"
+      org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>" \
+      org.opencontainers.image.licenses="MIT"
 
 RUN apk add --no-cache \
       aws-cli \

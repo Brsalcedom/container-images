@@ -30,6 +30,7 @@ published to Docker Hub (`docker.io/brsalcedom/<image>`) and GitHub Container Re
 | `release-please-config.json` | one release-please package per image |
 | `scripts/go-bump.sh` | bumps vulnerable Go dependencies when building tools from source |
 | `.github/scripts/plan.sh` | decides which images to process (matrix) |
+| `.github/scripts/metadata.sh` | reads and validates the OCI labels; emits index annotations and the Docker Hub short description |
 | `.github/scripts/scan.sh` | security gate (Trivy) |
 | `.github/scripts/publish.sh` | copies the scanned digest to every registry, moves tags, checks registries are in sync |
 | `.github/workflows/images.yml` | pipeline: lint, build, smoke test, gate, publish, weekly re-scan |
@@ -148,8 +149,12 @@ Bump helm to 4.3.2 to fix CVE-2026-1234 (HIGH) in `golang.org/x/net`.
   * Go tools are built from source with `--platform=$BUILDPLATFORM` (cross-compiled,
     no QEMU) and `go-bump.sh` for vulnerable dependencies. Empty the `*_GO_BUMPS`
     once upstream ships a release that includes them.
-  * OCI labels `title`, `description`, `source` (this repository) and
-    `authors`/`licenses`. `version` and `revision` are added by the pipeline.
+  * OCI labels `title`, `description` (at most 100 characters, it is also the Docker
+    Hub short description), `source` (this repository), `authors` and `licenses`
+    (`MIT`). They are required: `.github/scripts/metadata.sh` fails the build if any
+    is missing. The pipeline adds `version`, `revision`, `created`, `url` and
+    `documentation`, and copies the main ones as index annotations (GHCR reads those
+    for multi-arch images).
   * Non-root user with a numeric UID (`USER 1000:1000`). If an image runs as root,
     document why in its README.
   * No secrets, keys or credentials in the image or in the repository.
