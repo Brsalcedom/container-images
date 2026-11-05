@@ -53,9 +53,11 @@ images:
     test: linode-cli --version
 
   node-helloworld:
+    # Poll instead of a fixed sleep: under QEMU (arm64) node can take several seconds
     test: >-
-      (node index.js &) && sleep 2 &&
-      wget -qO- http://127.0.0.1:3000/health/readiness
+      (node index.js &);
+      i=0; until wget -qO- http://127.0.0.1:3000/health/readiness; do
+      i=$((i + 1)); [ "$i" -ge 30 ] && exit 1; sleep 1; done
 
   pentesting:
     platforms: linux/amd64
