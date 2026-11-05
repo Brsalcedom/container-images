@@ -48,7 +48,7 @@ jobs:
           fetch-depth: 0
 
       - id: plan
-        run: .github/scripts/plan.sh
+        run: bash .github/scripts/plan.sh
         env:
           EVENT: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -110,7 +110,7 @@ jobs:
         run: |
           publish=false
           if [[ $CAN_PUBLISH == true ]]; then
-            if .github/scripts/publish.sh exists "$REPO" "$VERSION"; then
+            if bash .github/scripts/publish.sh exists "$REPO" "$VERSION"; then
               echo "::notice::$REPO:$VERSION already exists on Docker Hub: validating only, not publishing."
             else
               publish=true
@@ -169,11 +169,11 @@ jobs:
       - name: Security gate (Trivy)
         env:
           TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
-        run: .github/scripts/scan.sh "$LOCAL_IMAGE" "$PLATFORMS"
+        run: bash .github/scripts/scan.sh "$LOCAL_IMAGE" "$PLATFORMS"
 
       - name: Publish to Docker Hub
         if: steps.decide.outputs.publish == 'true'
-        run: .github/scripts/publish.sh push "$LOCAL_IMAGE" "$REPO" "$VERSION"
+        run: bash .github/scripts/publish.sh push "$LOCAL_IMAGE" "$REPO" "$VERSION"
 
       - name: Update Docker Hub description
         if: steps.decide.outputs.publish == 'true'
@@ -229,7 +229,7 @@ jobs:
           TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
           SARIF_DIR: sarif
         run: |
-          .github/scripts/scan.sh \
+          bash .github/scripts/scan.sh \
             "docker.io/brsalcedom/${{ matrix.image.name }}:${{ matrix.image.version }}" \
             "${{ matrix.image.platforms }}"
 
