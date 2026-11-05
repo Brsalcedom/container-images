@@ -7,6 +7,7 @@
 # Inputs (environment variables):
 #   TRIVY_IMAGE      Trivy image to use (version pinned in the workflow)
 #   TRIVY_CACHE_DIR  Trivy database directory (default ~/.cache/trivy)
+#   TRIVY_DISTRO     optional <family>/<version> to override OS detection (--distro)
 #   SARIF_DIR        if set (path relative to the current directory), also writes the
 #                    full report for the first platform to $SARIF_DIR/results.sarif
 set -euo pipefail
@@ -37,6 +38,10 @@ common=(
   --timeout 30m
   --quiet
 )
+if [[ -n ${TRIVY_DISTRO:-} ]]; then
+  common+=(--distro "$TRIVY_DISTRO")
+  echo "::notice::Scanning $image with --distro $TRIVY_DISTRO"
+fi
 
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT

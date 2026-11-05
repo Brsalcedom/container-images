@@ -205,6 +205,7 @@ jobs:
       - name: Security gate (Trivy)
         env:
           TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
+          TRIVY_DISTRO: ${{ matrix.image.trivy-distro }}
         run: bash .github/scripts/scan.sh "$LOCAL_IMAGE" "$PLATFORMS"
 
       - name: Publish
@@ -287,6 +288,7 @@ jobs:
         if: always()
         env:
           TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
+          TRIVY_DISTRO: ${{ matrix.image.trivy-distro }}
           SARIF_DIR: sarif
         run: |
           bash .github/scripts/scan.sh \

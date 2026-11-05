@@ -11,7 +11,8 @@
 #   INPUT_IMAGE  workflow_dispatch: a single image (empty = all)
 #   ALL          "true" to always process every image (e.g. scheduled scan)
 # Outputs ($GITHUB_OUTPUT):
-#   images  JSON with [{name, version, repos, platforms, test, free-disk-space, cache, sbom}]
+#   images  JSON with [{name, version, repos, platforms, test, free-disk-space, cache, sbom,
+#           trivy-distro}]
 #           `repos` = every registry/namespace the image is published to + "/<name>"
 #   any     "true" if there is at least one image
 set -euo pipefail
@@ -38,7 +39,8 @@ all=$(yq -o=json -I=0 '
     "test": (.value.test // ""),
     "free-disk-space": (.value."free-disk-space" == true),
     "cache": (.value.cache != false),
-    "sbom": (.value.sbom != false)
+    "sbom": (.value.sbom != false),
+    "trivy-distro": (.value."trivy-distro" // "")
   })' "$CONFIG" \
   | jq -c --slurpfile v "$VERSIONS" --argjson r "$(registries_at WORKTREE)" '
       map(. + {

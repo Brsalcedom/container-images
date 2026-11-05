@@ -25,7 +25,7 @@ published to Docker Hub (`docker.io/brsalcedom/<image>`) and GitHub Container Re
 | `images/<image>/Dockerfile.dockerignore` | what enters the context (everything excluded except the image folder and any shared files it uses) |
 | `images/<image>/README.md` | documentation; published as the Docker Hub description |
 | `images/<image>/CHANGELOG.md` | maintained by release-please; do not edit by hand except when adding the image |
-| `images.yml` | target `registries` and per-image build settings: `registries`, `platforms`, `test`, `free-disk-space`, `cache`, `sbom` |
+| `images.yml` | target `registries` and per-image build settings: `registries`, `platforms`, `test`, `free-disk-space`, `cache`, `sbom`, `trivy-distro` |
 | `.release-please-manifest.json` | current version of each image (single source of truth) |
 | `release-please-config.json` | one release-please package per image |
 | `scripts/go-bump.sh` | bumps vulnerable Go dependencies when building tools from source |
@@ -172,6 +172,10 @@ Bump helm to 4.3.2 to fix CVE-2026-1234 (HIGH) in `golang.org/x/net`.
 
 * Blocks **fixable HIGH and CRITICAL CVEs** on every platform.
   **Do not disable it, lower its severity or bypass it** to get an image published.
+* Check that Trivy actually matches the image OS: an unsupported or unknown OS version
+  yields **0 findings of every severity**, which is not a clean image. Scan once without
+  `--quiet` and look at `Detected OS`; if it does not match an advisory source, set
+  `trivy-distro` in `images.yml` (e.g. Kali → `debian/14`).
 * Preferred order for fixing a CVE:
   1. update the base image or the package;
   2. build from source;

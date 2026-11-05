@@ -32,6 +32,8 @@
 #                                repository)
 #   sbom             (optional)  attach an SBOM attestation to the image (default true;
 #                                disable when it exceeds BuildKit's 80MB attestation limit)
+#   trivy-distro     (optional)  <family>/<version> passed to `trivy --distro` when Trivy
+#                                cannot match the image OS to its advisories (e.g. Kali)
 
 registries:
   - docker.io/brsalcedom
@@ -65,6 +67,10 @@ images:
     cache: false
     # Kali + metasploit + SecLists produce an SBOM over BuildKit's 80MB limit
     sbom: false
+    # Trivy detects Kali as "debian kali-rolling", which matches no Debian advisories:
+    # without this, OS packages are silently not checked (0 findings of any severity).
+    # Kali rolling tracks Debian testing (forky, 14); update when testing moves on.
+    trivy-distro: debian/14
     test: >-
       nmap --version && nxc smb --help > /dev/null && kerbrute version &&
       msfconsole --version && impacket-secretsdump -h > /dev/null
