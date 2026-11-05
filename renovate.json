@@ -1,8 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
   ],
+  "semanticCommits": "enabled",
   "docker": {
     "enabled": true,
     "pinDigests": true
@@ -14,9 +16,32 @@
     "enabled": true,
     "labels": ["security", "dependencies"]
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "ARGs/variables annotated with `# renovate: datasource=... depName=...` in Dockerfiles and workflows",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile$/",
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?\\s*\\n\\s*(?:ARG\\s+|ENV\\s+)?[A-Za-z0-9_]+\\s*[=:]\\s*\"?(?<currentValue>[^\"\\s]+)\"?"
+      ]
+    }
+  ],
   "packageRules": [
     {
-      "description": "Docker base images - auto-merge patch updates",
+      "description": "Changes inside an image: `fix(...)` commit so release-please cuts a patch release of that image",
+      "matchFileNames": ["images/**"],
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "Repository workflows and tooling: no image release",
+      "matchFileNames": [".github/**", "scripts/**"],
+      "semanticCommitType": "chore"
+    },
+    {
+      "description": "Docker base images - patch/pin/digest (manual review)",
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["patch", "pin", "digest"],
       "automerge": false,
@@ -40,12 +65,10 @@
       "schedule": ["before 6am on monday"]
     },
     {
-      "description": "Security updates - high priority",
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "vulnerabilitySeverity": "high",
-      "labels": ["security", "dependencies", "high-priority"],
-      "schedule": ["at any time"]
+      "description": "Tools built from source (ARG *_VERSION)",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["images/**"],
+      "schedule": ["before 6am on monday"]
     }
   ],
   "prConcurrentLimit": 5,

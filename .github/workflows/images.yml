@@ -1,0 +1,303 @@
+# Build, security gate and publishing for the images in images.yml.
+#
+#   pull_request       build + smoke test + Trivy for the changed images (no push)
+#   push to main       same, and publishes to every registry in images.yml where the
+#                      version does not exist yet (Docker Hub and GHCR)
+#   workflow_dispatch  same as push (publishes on main; only validates on other branches)
+#   schedule           re-scans the published versions, uploads SARIF to Security and
+#                      checks that every registry serves the same digest
+#
+# The required check in the main branch protection is `gate` (summarizes the matrix).
+name: images
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 10 * * 1" # Mondays 10:00 UTC
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Image to process (empty = all)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Only PRs cancel the previous run. On main every push must be processed: if a pending
+# run were discarded, its images would never be published.
+concurrency:
+  group: images-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # Official Trivy image, deliberately pinned: the trivy-action and setup-trivy tags
+  # were compromised in March 2026 (GHSA-69fq-xp46-6x23).
+  # renovate: datasource=docker depName=aquasec/trivy
+  TRIVY_VERSION: "0.69.3"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.plan.outputs.images }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        run: bash .github/scripts/plan.sh
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          INPUT_IMAGE: ${{ inputs.image }}
+          ALL: ${{ github.event_name == 'schedule' }}
+
+  build:
+    name: build (${{ matrix.image.name }})
+    needs: plan
+    if: needs.plan.outputs.any == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io with GITHUB_TOKEN
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    services:
+      # Ephemeral registry: the image is built here, tested and scanned, and only then
+      # copied as-is (same digest) to every target registry
+      registry:
+        image: registry:3
+        ports:
+          - 5000:5000
+    env:
+      NAME: ${{ matrix.image.name }}
+      VERSION: ${{ matrix.image.version }}
+      PLATFORMS: ${{ matrix.image.platforms }}
+      REPOS: ${{ join(matrix.image.repos, ' ') }}
+      LOCAL_IMAGE: localhost:5000/${{ matrix.image.name }}:${{ github.sha }}
+      # PRs from forks have no access to secrets
+      HAS_SECRETS: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      CAN_PUBLISH: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    steps:
+      - name: Free disk space
+        if: matrix.image.free-disk-space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          large-packages: false
+          docker-images: false
+
+      - uses: actions/checkout@v6
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: images/${{ matrix.image.name }}/Dockerfile
+          config: .hadolint.yaml
+
+      - name: Read image metadata
+        id: meta
+        run: bash .github/scripts/metadata.sh "$NAME"
+
+      - name: Login to Docker Hub
+        if: env.HAS_SECRETS == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        if: env.HAS_SECRETS == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish only to the registries where this version is missing (this also
+      # backfills a newly added registry)
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          targets=()
+          if [[ $CAN_PUBLISH == true ]]; then
+            for repo in $REPOS; do
+              if bash .github/scripts/publish.sh exists "$repo" "$VERSION"; then
+                echo "::notice::$repo:$VERSION already exists: skipping this registry."
+              else
+                targets+=("$repo")
+                echo "::notice::$repo:$VERSION does not exist: it will be published if it passes the gate."
+              fi
+            done
+          fi
+          echo "targets=${targets[*]}" >> "$GITHUB_OUTPUT"
+          echo "publish=$([[ ${#targets[@]} -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+        if: contains(matrix.image.platforms, 'arm')
+
+      - uses: docker/setup-buildx-action@v3
+        with:
+          # So that BuildKit can push to the local registry service
+          driver-opts: network=host
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/${{ matrix.image.name }}/Dockerfile
+          platforms: ${{ matrix.image.platforms }}
+          push: true
+          tags: ${{ env.LOCAL_IMAGE }}
+          # Registry-neutral URLs: the same image is served by every registry
+          labels: |
+            org.opencontainers.image.version=${{ matrix.image.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}/tree/main/images/${{ matrix.image.name }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}/blob/main/images/${{ matrix.image.name }}/README.md
+          # Index-level copies of the main labels: GHCR reads the description, source and
+          # license of multi-arch images from here
+          annotations: |
+            index:org.opencontainers.image.title=${{ steps.meta.outputs.title }}
+            index:org.opencontainers.image.description=${{ steps.meta.outputs.description }}
+            index:org.opencontainers.image.source=${{ steps.meta.outputs.source }}
+            index:org.opencontainers.image.authors=${{ steps.meta.outputs.authors }}
+            index:org.opencontainers.image.licenses=${{ steps.meta.outputs.licenses }}
+            index:org.opencontainers.image.version=${{ matrix.image.version }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+          provenance: mode=max
+          sbom: ${{ matrix.image.sbom }}
+          cache-from: ${{ matrix.image.cache && format('type=gha,scope={0}', matrix.image.name) || '' }}
+          cache-to: ${{ matrix.image.cache && format('type=gha,scope={0},mode=max', matrix.image.name) || '' }}
+
+      - name: Smoke test
+        if: matrix.image.test != ''
+        env:
+          TEST: ${{ matrix.image.test }}
+        run: |
+          IFS=, read -ra platforms <<<"$PLATFORMS"
+          for platform in "${platforms[@]}"; do
+            echo "::group::Smoke test ($platform)"
+            docker run --rm --platform "$platform" --entrypoint sh "$LOCAL_IMAGE" -c "$TEST"
+            echo "::endgroup::"
+          done
+
+      - id: day
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ steps.day.outputs.day }}
+          restore-keys: trivy-db-
+
+      - name: Security gate (Trivy)
+        env:
+          TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
+          TRIVY_DISTRO: ${{ matrix.image.trivy-distro }}
+        run: bash .github/scripts/scan.sh "$LOCAL_IMAGE" "$PLATFORMS"
+
+      - name: Publish
+        if: steps.decide.outputs.publish == 'true'
+        env:
+          TARGETS: ${{ steps.decide.outputs.targets }}
+        run: |
+          # shellcheck disable=SC2086 # TARGETS is a space-separated list of repositories
+          bash .github/scripts/publish.sh push "$LOCAL_IMAGE" "$VERSION" $TARGETS
+
+      - name: Update Docker Hub description
+        if: contains(steps.decide.outputs.targets, 'docker.io/')
+        continue-on-error: true
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: brsalcedom/${{ matrix.image.name }}
+          short-description: ${{ steps.meta.outputs.description }}
+          readme-filepath: images/${{ matrix.image.name }}/README.md
+          enable-url-completion: true
+
+  # Single check for the main branch protection: fails if plan or any build failed
+  gate:
+    needs: [plan, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "plan=${{ needs.plan.result }} build=${{ needs.build.result }}"
+          [[ "${{ needs.plan.result }}" == success ]] || exit 1
+          [[ "${{ needs.build.result }}" =~ ^(success|skipped)$ ]] || exit 1
+
+  # New CVEs show up after publishing: weekly re-scan of what is published, plus a
+  # check that every registry serves the same digest.
+  # If the scan fails, a `fix(<image>): ...` commit (rebuild with patches) -> patch release.
+  scan-published:
+    name: scan-published (${{ matrix.image.name }})
+    needs: plan
+    if: needs.plan.outputs.any == 'true' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check registries are in sync
+        env:
+          VERSION: ${{ matrix.image.version }}
+          REPOS: ${{ join(matrix.image.repos, ' ') }}
+        run: |
+          # shellcheck disable=SC2086 # REPOS is a space-separated list of repositories
+          bash .github/scripts/publish.sh in-sync "$VERSION" $REPOS
+
+      - id: day
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ steps.day.outputs.day }}
+          restore-keys: trivy-db-
+
+      # Same digest everywhere (checked above): scanning the first registry is enough
+      - name: Scan published image
+        if: always()
+        env:
+          TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
+          TRIVY_DISTRO: ${{ matrix.image.trivy-distro }}
+          SARIF_DIR: sarif
+        run: |
+          bash .github/scripts/scan.sh \
+            "${{ matrix.image.repos[0] }}:${{ matrix.image.version }}" \
+            "${{ matrix.image.platforms }}"
+
+      - name: Upload SARIF
+        if: always() && hashFiles('sarif/results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sarif/results.sarif
+          category: image-${{ matrix.image.name }}

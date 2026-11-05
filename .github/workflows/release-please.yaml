@@ -1,3 +1,8 @@
+# Independent versioning per image (see release-please-config.json).
+# Opens one release PR per image with releasable changes (feat/fix/perf/deps or
+# breaking). Merging that PR makes the `images` workflow publish the new version.
+name: release-please
+
 on:
   push:
     branches: [main]
@@ -7,12 +12,15 @@ permissions:
   issues: write
   pull-requests: write
 
-name: release-please
-
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
         with:
-          release-type: simple
+          # PRs created with GITHUB_TOKEN do not trigger workflows, so the required
+          # `gate` check would never run on release PRs. RELEASE_PLEASE_TOKEN:
+          # fine-grained PAT for this repository with Contents + Pull requests: read/write.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

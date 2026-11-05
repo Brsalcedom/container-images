@@ -1,0 +1,30 @@
+# Trivy exceptions (https://trivy.dev/latest/docs/configuration/filtering/#trivyignoreyaml)
+#
+# Use it only for false positives or CVEs with no reasonable way to fix them.
+# Every exception needs a justification (`statement`) and an expiry date
+# (`expired_at`, at most 90 days out): once it expires, the pipeline blocks again and
+# forces a review. Adding or extending an exception requires explicit approval from
+# the repository owner.
+#
+# Whole classes of findings that are never exploitable in a container (e.g. kernel
+# headers) go in .trivyignore.rego instead.
+
+vulnerabilities:
+  # pentesting: Kali rolling lags behind Debian testing. These are fixed in Debian
+  # testing (forky) but not yet published in the Kali repos; `apt-get full-upgrade`
+  # in the Dockerfile picks the fix up as soon as Kali ships it.
+  - id: CVE-2026-111497
+    statement: "libbrotli1 1.2.0-4+b2 (Kali): fixed in Debian testing 1.2.0-4.1, not yet in Kali rolling. Remove once Kali ships it."
+    expired_at: 2026-12-05
+  - id: CVE-2026-119194
+    statement: "python3-pyasn1 0.6.4-1 (Kali): fixed in Debian testing 0.6.5-1, not yet in Kali rolling. Remove once Kali ships it."
+    expired_at: 2026-12-05
+  - id: CVE-2026-119195
+    statement: "python3-pyasn1 0.6.4-1 (Kali): fixed in Debian testing 0.6.5-1, not yet in Kali rolling. Remove once Kali ships it."
+    expired_at: 2026-12-05
+  - id: CVE-2026-119196
+    statement: "python3-pyasn1 0.6.4-1 (Kali): fixed in Debian testing 0.6.5-1, not yet in Kali rolling. Remove once Kali ships it."
+    expired_at: 2026-12-05
+  - id: CVE-2026-119197
+    statement: "python3-pyasn1 0.6.4-1 (Kali): fixed in Debian testing 0.6.5-1, not yet in Kali rolling. Remove once Kali ships it."
+    expired_at: 2026-12-05

@@ -1,0 +1,6 @@
+# The build context is the repository root: send only what this image needs
+*
+!images/linode-cli/
+images/linode-cli/README.md
+images/linode-cli/CHANGELOG.md
+images/linode-cli/**/node_modules

@@ -1,0 +1,76 @@
+# Images published by this repository: target registries and per-image build settings.
+#
+# Flow:
+#   1. A PR that touches images/<name>/: the image is built, tested and scanned with
+#      Trivy. If it has fixable HIGH/CRITICAL vulnerabilities, the `gate` check fails.
+#   2. Merge to main: release-please opens (or updates) one release PR per image that
+#      bumps its version and updates images/<name>/CHANGELOG.md based on the commits
+#      (fix -> patch, feat -> minor, `!`/BREAKING CHANGE -> major).
+#   3. Merging the release PR: the image is built and scanned again and, if it passes,
+#      published to every registry as `X.Y.Z`, `X.Y`, `X` and `latest` (same digest
+#      everywhere). A version that already exists in a registry is never overwritten.
+#
+# The version does NOT live here: it is in .release-please-manifest.json and
+# release-please bumps it.
+#
+# New image: create images/<name>/{Dockerfile,Dockerfile.dockerignore,README.md,CHANGELOG.md},
+# add it here, to release-please-config.json (packages) and to
+# .release-please-manifest.json with its initial version.
+#
+# registries: `<registry>/<namespace>` prefixes every image is published to, as
+# `<prefix>/<name>`. Adding one backfills it with the current version of every image.
+# Registries other than docker.io and ghcr.io need a login step in the workflow.
+#
+# Per-image fields:
+#   registries       (optional)  overrides the top-level list for this image
+#   platforms        (optional)  defaults to linux/amd64,linux/arm64
+#   test             (optional)  smoke test; runs with `sh -c` inside the image
+#                                (with --entrypoint sh, so it bypasses the ENTRYPOINT)
+#   free-disk-space  (optional)  frees ~30GB on the runner before building
+#   cache            (optional)  use the GitHub Actions cache across runs (default true;
+#                                disable for multi-GB images, the limit is 10GB per
+#                                repository)
+#   sbom             (optional)  attach an SBOM attestation to the image (default true;
+#                                disable when it exceeds BuildKit's 80MB attestation limit)
+#   trivy-distro     (optional)  <family>/<version> passed to `trivy --distro` when Trivy
+#                                cannot match the image OS to its advisories (e.g. Kali)
+
+registries:
+  - docker.io/brsalcedom
+  - ghcr.io/brsalcedom
+
+images:
+  homelab-ci:
+    test: >-
+      tofu version && kubectl version --client && task --version &&
+      envsubst --version > /dev/null && git --version && ssh -V &&
+      test "$(id -u)" = 1000 && touch /workspace/.write-test
+
+  kubetools:
+    test: >-
+      kubectl version --client && helm version --short && eksctl version &&
+      aws --version && gcloud --version && gke-gcloud-auth-plugin --version
+
+  linode-cli:
+    test: linode-cli --version
+
+  node-helloworld:
+    # Poll instead of a fixed sleep: under QEMU (arm64) node can take several seconds
+    test: >-
+      (node index.js &);
+      i=0; until wget -qO- http://127.0.0.1:3000/health/readiness; do
+      i=$((i + 1)); [ "$i" -ge 30 ] && exit 1; sleep 1; done
+
+  pentesting:
+    platforms: linux/amd64
+    free-disk-space: true
+    cache: false
+    # Kali + metasploit + SecLists produce an SBOM over BuildKit's 80MB limit
+    sbom: false
+    # Trivy detects Kali as "debian kali-rolling", which matches no Debian advisories:
+    # without this, OS packages are silently not checked (0 findings of any severity).
+    # Kali rolling tracks Debian testing (forky, 14); update when testing moves on.
+    trivy-distro: debian/14
+    test: >-
+      nmap --version && nxc smb --help > /dev/null && kerbrute version &&
+      msfconsole --version && impacket-secretsdump -h > /dev/null
