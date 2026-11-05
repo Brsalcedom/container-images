@@ -1,0 +1,7 @@
+# https://github.com/hadolint/hadolint#configure
+failure-threshold: warning
+ignored:
+  # Alpine y Kali solo mantienen la última versión de cada paquete en su rama:
+  # fijar versiones rompe el build en cuanto sale un parche de seguridad.
+  - DL3018 # apk add sin versión
+  - DL3008 # apt-get install sin versión

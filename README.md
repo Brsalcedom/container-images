@@ -1,90 +1,106 @@
 # Container Images
 
-This repository contains various container images for different purposes.
+Monorepo con mis imágenes de contenedor. Cada imagen tiene su propio versionamiento
+semántico y se publica en Docker Hub (`docker.io/brsalcedom/<imagen>`) solo si pasa el
+security gate.
 
-## Available Images
+| Imagen | Descripción | Plataformas | Links |
+|---|---|---|---|
+| [homelab-ci](images/homelab-ci/) | CI para IaC: OpenTofu, kubectl, Task, git, ssh, envsubst (no-root) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/homelab-ci) · [CHANGELOG](images/homelab-ci/CHANGELOG.md) |
+| [kubetools](images/kubetools/) | Toolbox de Kubernetes, AWS y GCP (kubectl, helm, eksctl, aws, gcloud) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/kubetools) · [CHANGELOG](images/kubetools/CHANGELOG.md) |
+| [linode-cli](images/linode-cli/) | linode-cli con boto3 (Object Storage) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/linode-cli) · [CHANGELOG](images/linode-cli/CHANGELOG.md) |
+| [node-helloworld](images/node-helloworld/) | Hello World en Node.js/Express con health checks para Kubernetes | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/node-helloworld) · [CHANGELOG](images/node-helloworld/CHANGELOG.md) |
+| [pentesting](images/pentesting/) | Kali Rolling con herramientas de pentesting para labs (HTB, THM) | amd64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/pentesting) · [CHANGELOG](images/pentesting/CHANGELOG.md) |
 
-### `homelab-ci`
+La versión actual de cada imagen está en [`.release-please-manifest.json`](.release-please-manifest.json).
 
-A minimal container image for CI/CD workflows, specifically designed for home lab infrastructure-as-code (IaC) tasks.
+## Estructura
 
-This image is based on Alpine Linux and comes pre-installed with the necessary tools for IaC workflows.
-
-#### Included Software
-
-*   **OpenTofu:** v1.10.3
-*   `git`
-*   `curl`
-*   `openssl`
-*   `ca-certificates`
-
-#### How to Use
-
-##### Building the Image
-
-To build the Docker image, run the following command from the root of the repository:
-
-```sh
-docker build -t homelab-ci -f images/homelab-ci/Dockerfile .
+```text
+images/<imagen>/
+  Dockerfile
+  Dockerfile.dockerignore   # el contexto es la raíz del repo: solo pasa lo necesario
+  README.md                 # se publica como descripción en Docker Hub
+  CHANGELOG.md              # lo mantiene release-please
+images.yml                  # configuración de build (plataformas, smoke test, caché...)
+.release-please-manifest.json  # versión actual de cada imagen
+release-please-config.json  # un package de release-please por imagen
+scripts/go-bump.sh          # sube dependencias Go con CVEs al compilar herramientas
+.github/scripts/            # plan.sh (qué imágenes procesar), scan.sh (gate), publish.sh
+.trivyignore.yaml           # excepciones de CVEs, con justificación y vencimiento
+.hadolint.yaml              # reglas de lint de Dockerfiles
 ```
 
-##### Running the Container
-
-You can run the container interactively and mount a local directory into the container's workspace. This is useful for running OpenTofu commands against your local IaC files.
+Las imágenes se construyen siempre desde la raíz del repo:
 
 ```sh
-docker run -it --rm -v "$(pwd):/workspace" homelab-ci sh
+docker build -t brsalcedom/<imagen>:dev -f images/<imagen>/Dockerfile .
 ```
 
-This command will start a shell session inside the container. The container runs as a non-root user `ci`, and the working directory is set to `/workspace`.
+## Versionamiento
 
-#### Image Details
+Cada imagen se versiona por separado con [release-please](https://github.com/googleapis/release-please)
+a partir de los commits (Conventional Commits, validado en el título del PR) que tocan
+`images/<imagen>/`:
 
-*   **Base Image:** `alpine:3.22`
-*   **User:** `ci` (non-root)
-*   **Working Directory:** `/workspace`
-*   **Source:** The Dockerfile can be found at `images/homelab-ci/Dockerfile`.
+| Commit | Release |
+|---|---|
+| `fix(kubetools): ...`, `deps(...)`, `perf(...)` | patch (`2.0.0` → `2.0.1`) |
+| `feat(kubetools): ...` | minor (`2.0.1` → `2.1.0`) |
+| `feat(kubetools)!: ...` o `BREAKING CHANGE:` | major (`2.1.0` → `3.0.0`) |
+| `chore`, `ci`, `docs`, `refactor`, `test`, `build`, `style` | sin release |
 
----
+Renovate usa `fix(deps)` para lo que está dentro de `images/`, así que las
+actualizaciones de dependencias generan un release patch.
 
-## 🔒 Security
+Cada versión se publica con los tags `X.Y.Z`, `X.Y`, `X` y `latest`. Los tags flotantes
+solo se mueven si la versión es la más alta de su rama, y una versión publicada nunca
+se sobrescribe.
 
-All container images in this repository are automatically scanned for vulnerabilities using [Trivy](https://github.com/aquasecurity/trivy) before being published.
+## Pipeline (`.github/workflows/images.yml`)
 
-### Security Scanning Process
+```text
+plan ──► build (matrix, una por imagen modificada) ──► gate
+         hadolint → build multi-arch a registry local → smoke test
+         → Trivy por plataforma → [main + versión nueva] copia a Docker Hub
+```
 
-1. **Automated PR Scans**: Every pull request that modifies image files triggers an automatic security scan
-2. **Vulnerability Detection**: Trivy scans for CRITICAL, HIGH, and MEDIUM severity vulnerabilities
-3. **Merge Protection**: PRs with CRITICAL vulnerabilities are automatically blocked from merging
-4. **SARIF Reports**: Scan results are uploaded to GitHub Security tab for tracking
-5. **SBOM Generation**: Software Bill of Materials (SBOM) is generated in CycloneDX format for compliance
+1. **PR**: se construyen, prueban y escanean solo las imágenes modificadas. Si alguna
+   tiene CVEs HIGH/CRITICAL con fix disponible, falla el check `gate` y no se puede
+   hacer merge.
+2. **Merge a main**: se repite la validación; release-please abre un PR de release por
+   cada imagen con cambios releasables.
+3. **Merge del PR de release**: la versión nueva se construye, se escanea y, si pasa,
+   se publica. Lo que se publica es exactamente el índice multi-arch que se escaneó
+   (mismo digest), copiado con `skopeo` desde el registry local del job.
+4. **Cada lunes**: se re-escanean las versiones publicadas (salen CVEs nuevas después
+   de publicar) y el reporte completo se sube a la pestaña *Security*. Si falla,
+   corresponde un `fix(<imagen>): rebuild` para publicar un patch con los parches.
 
-### Scan Results
+También se puede lanzar a mano (*Actions → images → Run workflow*), para una imagen o
+para todas. En `main` publica las versiones que aún no estén en Docker Hub.
 
-Security scan results are available in:
-- **PR Comments**: Automated comments show vulnerability summary
-- **GitHub Security Tab**: Detailed SARIF reports with CVE information
-- **Workflow Artifacts**: SBOM files are stored for 7 days
+### Security gate
 
-### Branch Protection
+* [Trivy](https://trivy.dev), con la versión de la imagen oficial fijada en el workflow.
+* Bloquea `CRITICAL` y `HIGH` con fix disponible (`--ignore-unfixed`), en **todas** las
+  plataformas de la imagen.
+* Excepciones solo en [`.trivyignore.yaml`](.trivyignore.yaml), cada una con `statement`
+  y `expired_at`. Al vencer, el gate vuelve a bloquear.
 
-The `main` branch is protected with required status checks. See [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md) for configuration details.
+## Configuración del repositorio
 
-### Manual Security Scan
+* **Secrets**:
+  * `DOCKERHUB_USERNAME` y `DOCKERHUB_TOKEN`: token de Docker Hub con permisos *Read,
+    Write, Delete*. *Delete* es necesario para actualizar la descripción.
+  * `RELEASE_PLEASE_TOKEN`: fine-grained PAT de este repo con *Contents* y *Pull
+    requests* en read/write. Sin él, los PRs de release no disparan los checks.
+* **Protección de `main`**: ver [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md).
 
-You can manually trigger a security scan for any image:
+## Agregar una imagen
 
-1. Go to the **Actions** tab
-2. Select **Docker :: Security Scan** workflow
-3. Click **Run workflow**
-4. Choose the image to scan
-
-### Fixing Vulnerabilities
-
-If a security scan detects vulnerabilities:
-
-1. Review the scan results in the PR comment or Security tab
-2. Update the base image to a newer version
-3. Update vulnerable packages in the Dockerfile
-4. Push changes to trigger a new scan
-5. Merge once the scan passes
+1. Crear `images/<imagen>/` con `Dockerfile`, `Dockerfile.dockerignore` (copiar el de
+   otra imagen) y `README.md`.
+2. Agregarla en `images.yml`, en `release-please-config.json` (`packages`) y en
+   `.release-please-manifest.json` con su versión inicial.
+3. Abrir el PR. Al hacer merge se publica la versión inicial.

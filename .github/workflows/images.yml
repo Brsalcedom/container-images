@@ -1,0 +1,241 @@
+# Build, security gate y publicación de las imágenes de images.yml.
+#
+#   pull_request       build + smoke test + Trivy de las imágenes modificadas (sin push)
+#   push a main        lo mismo y, si la versión todavía no existe en Docker Hub, publica
+#   workflow_dispatch  igual que push (en main publica; en otra rama solo valida)
+#   schedule           re-escanea las versiones ya publicadas y sube SARIF a Security
+#
+# El check requerido en la protección de main es `gate` (resume toda la matrix).
+name: images
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 10 * * 1" # lunes 10:00 UTC
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Imagen a procesar (vacío = todas)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Solo en PRs se cancela el run anterior. En main cada push debe procesarse: si un run
+# pendiente se descartara, sus imágenes no se publicarían.
+concurrency:
+  group: images-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # Imagen oficial de Trivy, versión fijada a propósito: los tags de trivy-action y
+  # setup-trivy fueron comprometidos en marzo de 2026 (GHSA-69fq-xp46-6x23).
+  # renovate: datasource=docker depName=aquasec/trivy
+  TRIVY_VERSION: "0.69.3"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.plan.outputs.images }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        run: .github/scripts/plan.sh
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          INPUT_IMAGE: ${{ inputs.image }}
+          ALL: ${{ github.event_name == 'schedule' }}
+
+  build:
+    name: build (${{ matrix.image.name }})
+    needs: plan
+    if: needs.plan.outputs.any == 'true' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    services:
+      # Registry efímero: la imagen se construye aquí, se prueba y escanea, y solo
+      # entonces se copia tal cual (mismo digest) a Docker Hub
+      registry:
+        image: registry:3
+        ports:
+          - 5000:5000
+    env:
+      NAME: ${{ matrix.image.name }}
+      VERSION: ${{ matrix.image.version }}
+      PLATFORMS: ${{ matrix.image.platforms }}
+      REPO: docker.io/brsalcedom/${{ matrix.image.name }}
+      LOCAL_IMAGE: localhost:5000/${{ matrix.image.name }}:${{ github.sha }}
+      # Los PRs desde forks no tienen acceso a secrets
+      HAS_SECRETS: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      CAN_PUBLISH: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    steps:
+      - name: Free disk space
+        if: matrix.image.free-disk-space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          large-packages: false
+          docker-images: false
+
+      - uses: actions/checkout@v6
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: images/${{ matrix.image.name }}/Dockerfile
+          config: .hadolint.yaml
+
+      - name: Login to Docker Hub
+        if: env.HAS_SECRETS == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Decide whether to publish
+        id: decide
+        run: |
+          publish=false
+          if [[ $CAN_PUBLISH == true ]]; then
+            if .github/scripts/publish.sh exists "$REPO" "$VERSION"; then
+              echo "::notice::$REPO:$VERSION ya existe en Docker Hub: se valida pero no se publica."
+            else
+              publish=true
+              echo "::notice::$REPO:$VERSION no existe: se publicará si pasa el gate."
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+        if: contains(matrix.image.platforms, 'arm')
+
+      - uses: docker/setup-buildx-action@v3
+        with:
+          # Para que BuildKit pueda hacer push al registry local del service
+          driver-opts: network=host
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/${{ matrix.image.name }}/Dockerfile
+          platforms: ${{ matrix.image.platforms }}
+          push: true
+          tags: ${{ env.LOCAL_IMAGE }}
+          labels: |
+            org.opencontainers.image.version=${{ matrix.image.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.url=https://hub.docker.com/r/brsalcedom/${{ matrix.image.name }}
+          provenance: mode=max
+          sbom: true
+          cache-from: ${{ matrix.image.cache && format('type=gha,scope={0}', matrix.image.name) || '' }}
+          cache-to: ${{ matrix.image.cache && format('type=gha,scope={0},mode=max', matrix.image.name) || '' }}
+
+      - name: Smoke test
+        if: matrix.image.test != ''
+        env:
+          TEST: ${{ matrix.image.test }}
+        run: |
+          IFS=, read -ra platforms <<<"$PLATFORMS"
+          for platform in "${platforms[@]}"; do
+            echo "::group::Smoke test ($platform)"
+            docker run --rm --platform "$platform" --entrypoint sh "$LOCAL_IMAGE" -c "$TEST"
+            echo "::endgroup::"
+          done
+
+      - id: day
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ steps.day.outputs.day }}
+          restore-keys: trivy-db-
+
+      - name: Security gate (Trivy)
+        env:
+          TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
+        run: .github/scripts/scan.sh "$LOCAL_IMAGE" "$PLATFORMS"
+
+      - name: Publish to Docker Hub
+        if: steps.decide.outputs.publish == 'true'
+        run: .github/scripts/publish.sh push "$LOCAL_IMAGE" "$REPO" "$VERSION"
+
+      - name: Update Docker Hub description
+        if: steps.decide.outputs.publish == 'true'
+        continue-on-error: true
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: brsalcedom/${{ matrix.image.name }}
+          readme-filepath: images/${{ matrix.image.name }}/README.md
+          enable-url-completion: true
+
+  # Check único para la protección de main: falla si plan o cualquier build falló
+  gate:
+    needs: [plan, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "plan=${{ needs.plan.result }} build=${{ needs.build.result }}"
+          [[ "${{ needs.plan.result }}" == success ]] || exit 1
+          [[ "${{ needs.build.result }}" =~ ^(success|skipped)$ ]] || exit 1
+
+  # Las CVEs nuevas aparecen después de publicar: re-escaneo semanal de lo publicado.
+  # Si falla, corresponde un `fix(<imagen>): ...` (rebuild con parches) -> release patch.
+  scan-published:
+    name: scan-published (${{ matrix.image.name }})
+    needs: plan
+    if: needs.plan.outputs.any == 'true' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: day
+        run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-db-${{ steps.day.outputs.day }}
+          restore-keys: trivy-db-
+
+      - name: Scan published image
+        env:
+          TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
+          SARIF_DIR: sarif
+        run: |
+          .github/scripts/scan.sh \
+            "docker.io/brsalcedom/${{ matrix.image.name }}:${{ matrix.image.version }}" \
+            "${{ matrix.image.platforms }}"
+
+      - name: Upload SARIF
+        if: always() && hashFiles('sarif/results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sarif/results.sarif
+          category: image-${{ matrix.image.name }}

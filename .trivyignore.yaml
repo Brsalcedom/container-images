@@ -1,0 +1,15 @@
+# Excepciones de Trivy (https://trivy.dev/latest/docs/configuration/filtering/#trivyignoreyaml)
+#
+# Úsalo solo para falsos positivos o para CVEs sin forma razonable de corregir.
+# Cada excepción debe llevar una justificación (`statement`) y una fecha de expiración
+# (`expired_at`): al vencer, el pipeline vuelve a bloquear y obliga a revisarla.
+#
+# Ejemplo:
+# vulnerabilities:
+#   - id: CVE-2026-00000
+#     paths:
+#       - "usr/local/bin/eksctl"
+#     statement: "Dependencia interna de eksctl, no explotable desde la CLI. Esperando release upstream."
+#     expired_at: 2026-12-31
+
+vulnerabilities: []

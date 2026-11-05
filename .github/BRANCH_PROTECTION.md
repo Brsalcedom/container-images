@@ -1,61 +1,28 @@
-# Branch Protection Configuration
+# Protección de `main`
 
-To ensure security scans are enforced before merging to `main`, configure the following branch protection rules in GitHub:
+Para que el security gate y la convención de commits sean obligatorios antes del merge,
+configura un *ruleset* (o branch protection rule) en
+`Settings → Rules → Rulesets → New branch ruleset`:
 
-## Settings → Branches → Branch protection rules → Add rule
+* **Target**: `main` (default branch)
+* **Restrict deletions** y **Block force pushes**
+* **Require a pull request before merging**
+  * Allowed merge methods: **Squash**. El título del PR queda como mensaje de commit,
+    que es lo que lee release-please.
+* **Require status checks to pass**
+  * `gate` (workflow `images`): resume toda la matrix de build + Trivy. No agregues
+    los jobs `build (<imagen>)`, porque su nombre cambia según lo que modifique el PR.
+  * `check-pr-title` (workflow `Validate PR Title`)
+  * Marca **Require branches to be up to date before merging**.
+* **Require conversation resolution before merging**
 
-### Branch name pattern
-```
-main
-```
+## Cómo funciona
 
-### Protection Rules
+1. Abres un PR que modifica `images/<imagen>/` con título `fix(<imagen>): ...`.
+2. `images` construye, prueba y escanea solo las imágenes afectadas. Si hay CVEs
+   HIGH/CRITICAL con fix, `gate` falla y el merge queda bloqueado.
+3. Al hacer merge, release-please abre `chore(<imagen>): release X.Y.Z`.
+4. Al hacer merge de ese PR, `images` vuelve a escanear y publica `X.Y.Z` en Docker Hub.
 
-#### ✅ Require a pull request before merging
-- [x] Require approvals: 1
-- [x] Dismiss stale pull request approvals when new commits are pushed
-
-#### ✅ Require status checks to pass before merging
-- [x] Require branches to be up to date before merging
-
-**Required status checks:**
-- `scan` (from `Docker :: Security Scan` workflow)
-
-#### ✅ Require conversation resolution before merging
-- [x] All conversations on code must be resolved
-
-#### ✅ Do not allow bypassing the above settings
-- [x] Include administrators
-
----
-
-## How it works
-
-1. Developer creates PR with Dockerfile changes
-2. `docker-security-scan.yml` workflow runs automatically
-3. Trivy scans the image for vulnerabilities
-4. If CRITICAL vulnerabilities found → PR is blocked ❌
-5. If scan passes → PR can be merged ✅
-6. After merge, manually trigger `docker-homelab-ci-publish.yml` to publish
-
----
-
-## Manual Configuration Steps
-
-1. Go to: `https://github.com/<your-username>/container-images/settings/branches`
-2. Click "Add rule"
-3. Enter `main` as branch name pattern
-4. Enable the checkboxes listed above
-5. In "Status checks that are required", search for and add: `scan`
-6. Click "Create" or "Save changes"
-
----
-
-## Testing the Protection
-
-To verify it's working:
-
-1. Create a test PR with a Dockerfile change
-2. Wait for the security scan to complete
-3. Try to merge before the scan finishes → Should be blocked
-4. After scan completes successfully → Merge should be allowed
+Los PRs de release necesitan el secret `RELEASE_PLEASE_TOKEN`. Con el `GITHUB_TOKEN`
+por defecto, GitHub no ejecuta workflows en esos PRs y `gate` queda pendiente.

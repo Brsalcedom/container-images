@@ -1,0 +1,7 @@
+{
+  "images/homelab-ci": "3.0.0",
+  "images/kubetools": "2.0.0",
+  "images/linode-cli": "2.0.0",
+  "images/node-helloworld": "2.0.0",
+  "images/pentesting": "2.0.0"
+}

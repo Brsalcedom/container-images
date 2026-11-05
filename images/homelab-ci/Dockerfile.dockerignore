@@ -1,0 +1,7 @@
+# The build context is the repository root: send only what this image needs
+*
+!images/homelab-ci/
+!scripts/go-bump.sh
+images/homelab-ci/README.md
+images/homelab-ci/CHANGELOG.md
+images/homelab-ci/**/node_modules

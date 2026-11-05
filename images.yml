@@ -1,0 +1,54 @@
+# Imágenes publicadas en Docker Hub (docker.io/brsalcedom/<nombre>): configuración de build.
+#
+# Flujo:
+#   1. PR que toca images/<nombre>/: se construye, se prueba y se escanea con Trivy.
+#      Si hay vulnerabilidades HIGH/CRITICAL con fix disponible, el check `gate` falla.
+#   2. Merge a main: release-please abre (o actualiza) un PR de release por imagen que
+#      sube su versión y actualiza images/<nombre>/CHANGELOG.md según los commits
+#      (fix -> patch, feat -> minor, `!`/BREAKING CHANGE -> major).
+#   3. Merge del PR de release: la imagen se vuelve a construir y escanear y, si pasa,
+#      se publica como `X.Y.Z`, `X.Y`, `X` y `latest`. Una versión que ya existe en
+#      Docker Hub nunca se sobrescribe.
+#
+# La versión NO va aquí: vive en .release-please-manifest.json y la sube release-please.
+#
+# Imagen nueva: crear images/<nombre>/{Dockerfile,Dockerfile.dockerignore,README.md},
+# agregarla aquí, en release-please-config.json (packages) y en
+# .release-please-manifest.json con su versión inicial.
+#
+# Campos por imagen:
+#   platforms        (opcional)    por defecto linux/amd64,linux/arm64
+#   test             (opcional)    smoke test; se ejecuta con `sh -c` dentro de la imagen
+#                                  (con --entrypoint sh, así que no pasa por el ENTRYPOINT)
+#   free-disk-space  (opcional)    libera ~30GB en el runner antes de construir
+#   cache            (opcional)    usar el caché de GitHub Actions entre ejecuciones (por
+#                                  defecto true; desactivar en imágenes de varios GB, el
+#                                  límite es 10GB por repositorio)
+
+images:
+  homelab-ci:
+    test: >-
+      tofu version && kubectl version --client && task --version &&
+      envsubst --version > /dev/null && git --version && ssh -V &&
+      test "$(id -u)" = 1000 && touch /workspace/.write-test
+
+  kubetools:
+    test: >-
+      kubectl version --client && helm version --short && eksctl version &&
+      aws --version && gcloud --version && gke-gcloud-auth-plugin --version
+
+  linode-cli:
+    test: linode-cli --version
+
+  node-helloworld:
+    test: >-
+      (node index.js &) && sleep 2 &&
+      wget -qO- http://127.0.0.1:3000/health/readiness
+
+  pentesting:
+    platforms: linux/amd64
+    free-disk-space: true
+    cache: false
+    test: >-
+      nmap --version && nxc smb --help > /dev/null && kerbrute version &&
+      msfconsole --version && impacket-secretsdump -h > /dev/null
