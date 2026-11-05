@@ -1,9 +1,11 @@
 # Build, security gate and publishing for the images in images.yml.
 #
 #   pull_request       build + smoke test + Trivy for the changed images (no push)
-#   push to main       same, and publishes if the version does not exist on Docker Hub yet
+#   push to main       same, and publishes to every registry in images.yml where the
+#                      version does not exist yet (Docker Hub and GHCR)
 #   workflow_dispatch  same as push (publishes on main; only validates on other branches)
-#   schedule           re-scans the published versions and uploads SARIF to Security
+#   schedule           re-scans the published versions, uploads SARIF to Security and
+#                      checks that every registry serves the same digest
 #
 # The required check in the main branch protection is `gate` (summarizes the matrix).
 name: images
@@ -61,13 +63,16 @@ jobs:
     if: needs.plan.outputs.any == 'true' && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io with GITHUB_TOKEN
     strategy:
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.plan.outputs.images) }}
     services:
       # Ephemeral registry: the image is built here, tested and scanned, and only then
-      # copied as-is (same digest) to Docker Hub
+      # copied as-is (same digest) to every target registry
       registry:
         image: registry:3
         ports:
@@ -76,7 +81,7 @@ jobs:
       NAME: ${{ matrix.image.name }}
       VERSION: ${{ matrix.image.version }}
       PLATFORMS: ${{ matrix.image.platforms }}
-      REPO: docker.io/brsalcedom/${{ matrix.image.name }}
+      REPOS: ${{ join(matrix.image.repos, ' ') }}
       LOCAL_IMAGE: localhost:5000/${{ matrix.image.name }}:${{ github.sha }}
       # PRs from forks have no access to secrets
       HAS_SECRETS: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -105,19 +110,32 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Login to GHCR
+        if: env.HAS_SECRETS == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish only to the registries where this version is missing (this also
+      # backfills a newly added registry)
       - name: Decide whether to publish
         id: decide
         run: |
-          publish=false
+          targets=()
           if [[ $CAN_PUBLISH == true ]]; then
-            if bash .github/scripts/publish.sh exists "$REPO" "$VERSION"; then
-              echo "::notice::$REPO:$VERSION already exists on Docker Hub: validating only, not publishing."
-            else
-              publish=true
-              echo "::notice::$REPO:$VERSION does not exist: it will be published if it passes the gate."
-            fi
+            for repo in $REPOS; do
+              if bash .github/scripts/publish.sh exists "$repo" "$VERSION"; then
+                echo "::notice::$repo:$VERSION already exists: skipping this registry."
+              else
+                targets+=("$repo")
+                echo "::notice::$repo:$VERSION does not exist: it will be published if it passes the gate."
+              fi
+            done
           fi
-          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "targets=${targets[*]}" >> "$GITHUB_OUTPUT"
+          echo "publish=$([[ ${#targets[@]} -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
         if: contains(matrix.image.platforms, 'arm')
@@ -171,12 +189,16 @@ jobs:
           TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
         run: bash .github/scripts/scan.sh "$LOCAL_IMAGE" "$PLATFORMS"
 
-      - name: Publish to Docker Hub
+      - name: Publish
         if: steps.decide.outputs.publish == 'true'
-        run: bash .github/scripts/publish.sh push "$LOCAL_IMAGE" "$REPO" "$VERSION"
+        env:
+          TARGETS: ${{ steps.decide.outputs.targets }}
+        run: |
+          # shellcheck disable=SC2086 # TARGETS is a space-separated list of repositories
+          bash .github/scripts/publish.sh push "$LOCAL_IMAGE" "$VERSION" $TARGETS
 
       - name: Update Docker Hub description
-        if: steps.decide.outputs.publish == 'true'
+        if: contains(steps.decide.outputs.targets, 'docker.io/')
         continue-on-error: true
         uses: peter-evans/dockerhub-description@v4
         with:
@@ -197,8 +219,9 @@ jobs:
           [[ "${{ needs.plan.result }}" == success ]] || exit 1
           [[ "${{ needs.build.result }}" =~ ^(success|skipped)$ ]] || exit 1
 
-  # New CVEs show up after publishing: weekly re-scan of what is published.
-  # If it fails, a `fix(<image>): ...` commit (rebuild with patches) -> patch release.
+  # New CVEs show up after publishing: weekly re-scan of what is published, plus a
+  # check that every registry serves the same digest.
+  # If the scan fails, a `fix(<image>): ...` commit (rebuild with patches) -> patch release.
   scan-published:
     name: scan-published (${{ matrix.image.name }})
     needs: plan
@@ -206,6 +229,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
       security-events: write
     strategy:
       fail-fast: false
@@ -213,6 +237,21 @@ jobs:
         image: ${{ fromJSON(needs.plan.outputs.images) }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check registries are in sync
+        env:
+          VERSION: ${{ matrix.image.version }}
+          REPOS: ${{ join(matrix.image.repos, ' ') }}
+        run: |
+          # shellcheck disable=SC2086 # REPOS is a space-separated list of repositories
+          bash .github/scripts/publish.sh in-sync "$VERSION" $REPOS
 
       - id: day
         run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
@@ -224,13 +263,15 @@ jobs:
           key: trivy-db-${{ steps.day.outputs.day }}
           restore-keys: trivy-db-
 
+      # Same digest everywhere (checked above): scanning the first registry is enough
       - name: Scan published image
+        if: always()
         env:
           TRIVY_IMAGE: aquasec/trivy:${{ env.TRIVY_VERSION }}
           SARIF_DIR: sarif
         run: |
           bash .github/scripts/scan.sh \
-            "docker.io/brsalcedom/${{ matrix.image.name }}:${{ matrix.image.version }}" \
+            "${{ matrix.image.repos[0] }}:${{ matrix.image.version }}" \
             "${{ matrix.image.platforms }}"
 
       - name: Upload SARIF

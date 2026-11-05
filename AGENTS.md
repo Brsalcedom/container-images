@@ -7,11 +7,12 @@ with the code, flag it: one of the two probably needs updating.
 ## Repository goal
 
 A monorepo with all of Bryan Salcedo's (`brsalcedom`) custom container images,
-published to Docker Hub as `docker.io/brsalcedom/<image>`.
+published to Docker Hub (`docker.io/brsalcedom/<image>`) and GitHub Container Registry
+(`ghcr.io/brsalcedom/<image>`), with the same digest in every registry.
 
 1. **One image per folder** under `images/<image>/`, each with its own independent
    semantic version.
-2. **Nothing reaches Docker Hub without passing the security gate.** An image with
+2. **Nothing reaches a registry without passing the security gate.** An image with
    HIGH or CRITICAL CVEs that have a fix available is not published.
 3. **Minimal, reproducible images**: pinned versions, multi-stage builds, no build
    tooling in the final image, non-root unless there is a reason not to.
@@ -24,13 +25,13 @@ published to Docker Hub as `docker.io/brsalcedom/<image>`.
 | `images/<image>/Dockerfile.dockerignore` | what enters the context (everything excluded except the image folder and any shared files it uses) |
 | `images/<image>/README.md` | documentation; published as the Docker Hub description |
 | `images/<image>/CHANGELOG.md` | maintained by release-please; do not edit by hand except when adding the image |
-| `images.yml` | per-image build settings: `platforms`, `test`, `free-disk-space`, `cache`, `sbom` |
+| `images.yml` | target `registries` and per-image build settings: `registries`, `platforms`, `test`, `free-disk-space`, `cache`, `sbom` |
 | `.release-please-manifest.json` | current version of each image (single source of truth) |
 | `release-please-config.json` | one release-please package per image |
 | `scripts/go-bump.sh` | bumps vulnerable Go dependencies when building tools from source |
 | `.github/scripts/plan.sh` | decides which images to process (matrix) |
 | `.github/scripts/scan.sh` | security gate (Trivy) |
-| `.github/scripts/publish.sh` | copies the scanned digest to Docker Hub and moves tags |
+| `.github/scripts/publish.sh` | copies the scanned digest to every registry, moves tags, checks registries are in sync |
 | `.github/workflows/images.yml` | pipeline: lint, build, smoke test, gate, publish, weekly re-scan |
 | `.trivyignore.yaml` | CVE exceptions |
 | `.hadolint.yaml` | Dockerfile lint rules |

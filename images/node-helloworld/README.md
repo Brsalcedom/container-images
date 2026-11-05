@@ -24,7 +24,12 @@ version are in the [CHANGELOG](CHANGELOG.md).
 
 ## Usage
 
-Docker Hub: [https://hub.docker.com/r/brsalcedom/node-helloworld](https://hub.docker.com/r/brsalcedom/node-helloworld)
+Available from two registries, with the same digest in both:
+
+| Registry | Image |
+|---|---|
+| [Docker Hub](https://hub.docker.com/r/brsalcedom/node-helloworld) | `docker.io/brsalcedom/node-helloworld` |
+| [GitHub Container Registry](https://github.com/Brsalcedom/container-images/pkgs/container/node-helloworld) | `ghcr.io/brsalcedom/node-helloworld` |
 
 **Quick start**
 

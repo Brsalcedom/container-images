@@ -23,7 +23,12 @@ version are in the [CHANGELOG](CHANGELOG.md).
 
 ## Usage
 
-Docker Hub: [https://hub.docker.com/r/brsalcedom/linode-cli](https://hub.docker.com/r/brsalcedom/linode-cli)
+Available from two registries, with the same digest in both:
+
+| Registry | Image |
+|---|---|
+| [Docker Hub](https://hub.docker.com/r/brsalcedom/linode-cli) | `docker.io/brsalcedom/linode-cli` |
+| [GitHub Container Registry](https://github.com/Brsalcedom/container-images/pkgs/container/linode-cli) | `ghcr.io/brsalcedom/linode-cli` |
 
 Since 2.0 the `ENTRYPOINT` is `linode-cli`, so arguments are passed directly:
 

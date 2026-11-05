@@ -1,16 +1,17 @@
 # Container Images
 
 A monorepo with my container images. Each image is versioned independently with
-semantic versioning and is published to Docker Hub (`docker.io/brsalcedom/<image>`)
+semantic versioning and is published to Docker Hub (`docker.io/brsalcedom/<image>`) and
+GitHub Container Registry (`ghcr.io/brsalcedom/<image>`), with the same digest in both,
 only if it passes the security gate.
 
 | Image | Description | Platforms | Links |
 |---|---|---|---|
-| [homelab-ci](images/homelab-ci/) | CI for IaC: OpenTofu, kubectl, Task, git, ssh, envsubst (non-root) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/homelab-ci) · [CHANGELOG](images/homelab-ci/CHANGELOG.md) |
-| [kubetools](images/kubetools/) | Kubernetes, AWS and GCP toolbox (kubectl, helm, eksctl, aws, gcloud) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/kubetools) · [CHANGELOG](images/kubetools/CHANGELOG.md) |
-| [linode-cli](images/linode-cli/) | linode-cli with boto3 (Object Storage) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/linode-cli) · [CHANGELOG](images/linode-cli/CHANGELOG.md) |
-| [node-helloworld](images/node-helloworld/) | Node.js/Express Hello World with Kubernetes health checks | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/node-helloworld) · [CHANGELOG](images/node-helloworld/CHANGELOG.md) |
-| [pentesting](images/pentesting/) | Kali Rolling with pentesting tools for labs (HTB, THM) | amd64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/pentesting) · [CHANGELOG](images/pentesting/CHANGELOG.md) |
+| [homelab-ci](images/homelab-ci/) | CI for IaC: OpenTofu, kubectl, Task, git, ssh, envsubst (non-root) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/homelab-ci) · [GHCR](https://github.com/Brsalcedom/container-images/pkgs/container/homelab-ci) · [CHANGELOG](images/homelab-ci/CHANGELOG.md) |
+| [kubetools](images/kubetools/) | Kubernetes, AWS and GCP toolbox (kubectl, helm, eksctl, aws, gcloud) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/kubetools) · [GHCR](https://github.com/Brsalcedom/container-images/pkgs/container/kubetools) · [CHANGELOG](images/kubetools/CHANGELOG.md) |
+| [linode-cli](images/linode-cli/) | linode-cli with boto3 (Object Storage) | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/linode-cli) · [GHCR](https://github.com/Brsalcedom/container-images/pkgs/container/linode-cli) · [CHANGELOG](images/linode-cli/CHANGELOG.md) |
+| [node-helloworld](images/node-helloworld/) | Node.js/Express Hello World with Kubernetes health checks | amd64, arm64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/node-helloworld) · [GHCR](https://github.com/Brsalcedom/container-images/pkgs/container/node-helloworld) · [CHANGELOG](images/node-helloworld/CHANGELOG.md) |
+| [pentesting](images/pentesting/) | Kali Rolling with pentesting tools for labs (HTB, THM) | amd64 | [Docker Hub](https://hub.docker.com/r/brsalcedom/pentesting) · [GHCR](https://github.com/Brsalcedom/container-images/pkgs/container/pentesting) · [CHANGELOG](images/pentesting/CHANGELOG.md) |
 
 The current version of each image is in [`.release-please-manifest.json`](.release-please-manifest.json).
 
@@ -22,7 +23,7 @@ images/<image>/
   Dockerfile.dockerignore   # the context is the repo root: only let through what is needed
   README.md                 # published as the Docker Hub description
   CHANGELOG.md              # maintained by release-please
-images.yml                  # build settings (platforms, smoke test, cache...)
+images.yml                  # target registries + build settings (platforms, smoke test...)
 .release-please-manifest.json  # current version of each image
 release-please-config.json  # one release-please package per image
 scripts/go-bump.sh          # bumps vulnerable Go dependencies when building tools
@@ -63,7 +64,7 @@ never overwritten.
 ```text
 plan ──► build (matrix, one per changed image) ──► gate
          hadolint → multi-arch build to a local registry → smoke test
-         → Trivy per platform → [main + new version] copy to Docker Hub
+         → Trivy per platform → [main + new version] copy to every registry
 ```
 
 1. **PR**: only the changed images are built, tested and scanned. If any of them has
@@ -71,14 +72,23 @@ plan ──► build (matrix, one per changed image) ──► gate
 2. **Merge to main**: validation runs again; release-please opens one release PR per
    image with releasable changes.
 3. **Merging the release PR**: the new version is built, scanned and, if it passes,
-   published. What gets published is exactly the multi-arch index that was scanned
-   (same digest), copied with `skopeo` from the job's local registry.
+   published to every registry in `images.yml`. What gets published is exactly the
+   multi-arch index that was scanned (same digest), copied with `skopeo` from the job's
+   local registry.
 4. **Every Monday**: published versions are re-scanned (new CVEs show up after
-   publishing) and the full report is uploaded to the *Security* tab. If it fails, a
-   `fix(<image>): rebuild` commit publishes a patch with the fixes.
+   publishing), the full report is uploaded to the *Security* tab, and every registry
+   is checked to serve the same digest. If the scan fails, a `fix(<image>): rebuild`
+   commit publishes a patch with the fixes.
 
 It can also be triggered manually (*Actions → images → Run workflow*) for one image or
-all of them. On `main` it publishes any versions not yet on Docker Hub.
+all of them. On `main` it publishes any versions missing from a registry.
+
+### Registries
+
+Target registries are listed under `registries:` in [`images.yml`](images.yml) (an
+image can override the list). Adding a registry backfills it with the current version
+of every image on the next run. Registries other than Docker Hub and GHCR need a login
+step in the workflow.
 
 ### Security gate
 
@@ -95,6 +105,10 @@ all of them. On `main` it publishes any versions not yet on Docker Hub.
     Delete* permissions. *Delete* is needed to update the description.
   * `RELEASE_PLEASE_TOKEN`: fine-grained PAT for this repository with *Contents* and
     *Pull requests* read/write. Without it, release PRs do not trigger the checks.
+* **GHCR**: the workflow pushes with `GITHUB_TOKEN` (`packages: write`), so no secret is
+  needed. New packages are created **private**: make each one public once under
+  *Package settings → Change visibility*. A package that already exists and was not
+  created by this repository must grant it *Write* access under *Manage Actions access*.
 * **`main` protection**: see [`.github/BRANCH_PROTECTION.md`](.github/BRANCH_PROTECTION.md).
 
 ## Adding an image

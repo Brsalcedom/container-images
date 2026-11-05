@@ -34,7 +34,12 @@ version are in the [CHANGELOG](CHANGELOG.md).
 
 ## Usage
 
-Docker Hub: [https://hub.docker.com/r/brsalcedom/kubetools](https://hub.docker.com/r/brsalcedom/kubetools)
+Available from two registries, with the same digest in both:
+
+| Registry | Image |
+|---|---|
+| [Docker Hub](https://hub.docker.com/r/brsalcedom/kubetools) | `docker.io/brsalcedom/kubetools` |
+| [GitHub Container Registry](https://github.com/Brsalcedom/container-images/pkgs/container/kubetools) | `ghcr.io/brsalcedom/kubetools` |
 
 **Quick start**
 

@@ -28,7 +28,12 @@ version are in the [CHANGELOG](CHANGELOG.md).
 
 ## Usage
 
-Docker Hub: [https://hub.docker.com/r/brsalcedom/homelab-ci](https://hub.docker.com/r/brsalcedom/homelab-ci)
+Available from two registries, with the same digest in both:
+
+| Registry | Image |
+|---|---|
+| [Docker Hub](https://hub.docker.com/r/brsalcedom/homelab-ci) | `docker.io/brsalcedom/homelab-ci` |
+| [GitHub Container Registry](https://github.com/Brsalcedom/container-images/pkgs/container/homelab-ci) | `ghcr.io/brsalcedom/homelab-ci` |
 
 **Shell with the current directory mounted**
 
