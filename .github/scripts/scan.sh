@@ -1,25 +1,26 @@
 #!/usr/bin/env bash
-# Security gate: escanea una imagen con Trivy en cada plataforma y falla si encuentra
-# vulnerabilidades HIGH o CRITICAL con fix disponible (salvo las de .trivyignore.yaml).
+# Security gate: scans an image with Trivy on every platform and fails if it finds
+# HIGH or CRITICAL vulnerabilities with a fix available (except those in
+# .trivyignore.yaml).
 #
-# Uso: scan.sh <imagen> <plataformas separadas por coma>
-# Entradas (variables de entorno):
-#   TRIVY_IMAGE      imagen de Trivy a usar (versión fijada en el workflow)
-#   TRIVY_CACHE_DIR  directorio de la base de datos de Trivy (default ~/.cache/trivy)
-#   SARIF_DIR        si se define (ruta relativa al directorio actual), deja además el
-#                    reporte completo de la primera plataforma en $SARIF_DIR/results.sarif
+# Usage: scan.sh <image> <comma-separated platforms>
+# Inputs (environment variables):
+#   TRIVY_IMAGE      Trivy image to use (version pinned in the workflow)
+#   TRIVY_CACHE_DIR  Trivy database directory (default ~/.cache/trivy)
+#   SARIF_DIR        if set (path relative to the current directory), also writes the
+#                    full report for the first platform to $SARIF_DIR/results.sarif
 set -euo pipefail
 
 image=$1
 IFS=, read -ra platforms <<<"$2"
-: "${TRIVY_IMAGE:?TRIVY_IMAGE no definido}"
+: "${TRIVY_IMAGE:?TRIVY_IMAGE is not set}"
 cache=${TRIVY_CACHE_DIR:-$HOME/.cache/trivy}
 mkdir -p "$cache"
 [[ -n ${SARIF_DIR:-} ]] && mkdir -p "$SARIF_DIR"
 
 trivy() {
-  # --network host: para leer imágenes del registry local (localhost:5000).
-  # --user: que la caché y los reportes queden a nombre del runner (actions/cache).
+  # --network host: to read images from the local registry (localhost:5000).
+  # --user: keep the cache and reports owned by the runner user (actions/cache).
   docker run --rm --network host \
     --user "$(id -u):$(id -g)" -e HOME=/tmp \
     -v "$cache:/cache" \
@@ -55,9 +56,9 @@ for platform in "${platforms[@]}"; do
     {
       echo "### Trivy: \`$image\` ($platform)"
       if [[ $rc -eq 0 ]]; then
-        echo "✅ Sin vulnerabilidades HIGH/CRITICAL con fix disponible."
+        echo "✅ No fixable HIGH/CRITICAL vulnerabilities."
       else
-        echo '<details open><summary>❌ Vulnerabilidades encontradas</summary>'
+        echo '<details open><summary>❌ Vulnerabilities found</summary>'
         echo; echo '```'; cat "$report"; echo '```'; echo '</details>'
       fi
       echo
@@ -65,16 +66,16 @@ for platform in "${platforms[@]}"; do
   fi
 
   if [[ $rc -ne 0 ]]; then
-    echo "::error::$image ($platform) tiene vulnerabilidades HIGH/CRITICAL con fix disponible (exit $rc)"
+    echo "::error::$image ($platform) has fixable HIGH/CRITICAL vulnerabilities (exit $rc)"
     status=1
   fi
 done
 
 if [[ -n ${SARIF_DIR:-} ]]; then
-  # Reporte completo (todas las severidades) para la pestaña Security de GitHub
+  # Full report (all severities) for the GitHub Security tab
   trivy "${common[@]}" --platform "${platforms[0]}" --format sarif \
     --output "$SARIF_DIR/results.sarif" "$image" \
-    || echo "::warning::No se pudo generar el reporte SARIF de $image"
+    || echo "::warning::Could not generate the SARIF report for $image"
 fi
 
 exit $status

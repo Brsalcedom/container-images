@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Decide qué imágenes hay que procesar y las emite como matrix de GitHub Actions.
+# Decides which images to process and emits them as a GitHub Actions matrix.
 #
-# Fuentes:
-#   images.yml                     configuración de build de cada imagen
-#   .release-please-manifest.json  versión de cada imagen (la mantiene release-please)
+# Sources:
+#   images.yml                     per-image build settings
+#   .release-please-manifest.json  version of each image (maintained by release-please)
 #
-# Entradas (variables de entorno):
+# Inputs (environment variables):
 #   EVENT        github.event_name
-#   BASE_SHA     commit contra el que comparar (base del PR o `before` del push)
-#   INPUT_IMAGE  workflow_dispatch: imagen puntual (vacío = todas)
-#   ALL          "true" para procesar siempre todas (p.ej. escaneo programado)
-# Salidas ($GITHUB_OUTPUT):
-#   images  JSON con [{name, version, platforms, test, free-disk-space, cache}]
-#   any     "true" si hay al menos una imagen
+#   BASE_SHA     commit to compare against (PR base or the push `before`)
+#   INPUT_IMAGE  workflow_dispatch: a single image (empty = all)
+#   ALL          "true" to always process every image (e.g. scheduled scan)
+# Outputs ($GITHUB_OUTPUT):
+#   images  JSON with [{name, version, platforms, test, free-disk-space, cache}]
+#   any     "true" if there is at least one image
 set -euo pipefail
 
 CONFIG=images.yml
 VERSIONS=.release-please-manifest.json
 DEFAULT_PLATFORMS="linux/amd64,linux/arm64"
 
-# Nota: no usar `// true` para booleanos; `//` trata `false` como ausente.
+# Note: do not use `// true` for booleans; `//` treats `false` as missing.
 all=$(yq -o=json -I=0 '
   .images | to_entries | map({
     "name": .key,
@@ -30,12 +30,13 @@ all=$(yq -o=json -I=0 '
   })' "$CONFIG" \
   | jq -c --slurpfile v "$VERSIONS" 'map(. + {version: ($v[0]["images/\(.name)"] // "")})')
 
-# Toda imagen debe tener versión semver X.Y.Z: de ahí salen los tags X.Y.Z, X.Y, X y latest
+# Every image needs a strict X.Y.Z semver version: the X.Y.Z, X.Y, X and latest tags
+# are derived from it
 invalid=$(jq -r 'map(select(.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$") | not))
-                 | map("\(.name)=\(.version | if . == "" then "<sin versión>" else . end)")
+                 | map("\(.name)=\(.version | if . == "" then "<no version>" else . end)")
                  | join(", ")' <<<"$all")
 if [[ -n $invalid ]]; then
-  echo "::error file=$VERSIONS::Imágenes sin versión semver X.Y.Z en $VERSIONS (y en release-please-config.json): $invalid"
+  echo "::error file=$VERSIONS::Images without an X.Y.Z semver version in $VERSIONS (and release-please-config.json): $invalid"
   exit 1
 fi
 
@@ -56,7 +57,7 @@ if [[ ${ALL:-false} == true ]]; then
 elif [[ $EVENT == workflow_dispatch && -n ${INPUT_IMAGE:-} ]]; then
   selected=$(select_names "$INPUT_IMAGE")
   if [[ $(jq length <<<"$selected") -eq 0 ]]; then
-    echo "::error::La imagen '$INPUT_IMAGE' no existe en $CONFIG"
+    echo "::error::Image '$INPUT_IMAGE' does not exist in $CONFIG"
     exit 1
   fi
 elif [[ $EVENT == workflow_dispatch || -z ${BASE_SHA:-} || $BASE_SHA =~ ^0+$ ]] \
@@ -64,10 +65,9 @@ elif [[ $EVENT == workflow_dispatch || -z ${BASE_SHA:-} || $BASE_SHA =~ ^0+$ ]] 
   selected=$all
 else
   changed=$(git diff --name-only "$BASE_SHA" HEAD)
-  echo "Archivos modificados:"; sed 's/^/  /' <<<"$changed"
+  echo "Changed files:"; sed 's/^/  /' <<<"$changed"
 
-  # Cambios en el pipeline, en scripts compartidos o en la política de escaneo
-  # afectan a todas las imágenes
+  # Changes to the pipeline, shared scripts or the scan policy affect every image
   if grep -qE '^(\.github/workflows/images\.yml|\.github/scripts/|scripts/|\.trivyignore\.yaml|\.hadolint\.yaml)' <<<"$changed"; then
     selected=$all
   else
@@ -83,14 +83,14 @@ else
         names+=("$name")
       fi
       if [[ $dir_changed == true && $old_version == "$new_version" ]]; then
-        echo "::notice::'$name' cambió pero su versión sigue en $new_version: se construye y escanea, pero se publica recién cuando se haga merge del PR de release."
+        echo "::notice::'$name' changed but its version is still $new_version: it is built and scanned, but only published once the release PR is merged."
       fi
     done
     selected=$(select_names "${names[@]}")
   fi
 fi
 
-echo "Imágenes seleccionadas: $(jq -r 'map("\(.name)@\(.version)") | join(", ")' <<<"$selected")"
+echo "Selected images: $(jq -r 'map("\(.name)@\(.version)") | join(", ")' <<<"$selected")"
 {
   echo "images=$selected"
   echo "any=$(jq 'length > 0' <<<"$selected")"

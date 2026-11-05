@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# ---- builder: instala linode-cli en un virtualenv aislado ----
+# ---- builder: install linode-cli into an isolated virtualenv ----
 FROM alpine:3.24 AS builder
 
 # renovate: datasource=pypi depName=linode-cli
@@ -17,11 +17,11 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip uninstall -y pip \
     && find /opt/venv -name '__pycache__' -type d -prune -exec rm -rf {} +
 
-# ---- runtime: solo python3 de alpine + el virtualenv, sin pip ----
+# ---- runtime: only Alpine's python3 + the virtualenv, no pip ----
 FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="linode-cli" \
-      org.opencontainers.image.description="Imagen liviana con linode-cli (incluye boto3 para Object Storage)" \
+      org.opencontainers.image.description="Lightweight linode-cli image (includes boto3 for Object Storage)" \
       org.opencontainers.image.source="https://github.com/Brsalcedom/container-images" \
       org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>"
 

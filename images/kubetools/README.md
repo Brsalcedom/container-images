@@ -1,48 +1,48 @@
 ## Info
 
-Toolbox para trabajar con Kubernetes, AWS y GCP desde la CLI.
+CLI toolbox for working with Kubernetes, AWS and GCP.
 
-| Herramienta | Versión | Origen |
+| Tool | Version | Source |
 |---|---|---|
-| kubectl | 1.37 | compilado desde el código fuente con Go 1.27 |
-| helm | 4.3 | compilado desde el código fuente con Go 1.27 |
-| eksctl | 0.231 | compilado desde el código fuente con Go 1.27 |
-| gcloud + gke-gcloud-auth-plugin | 592 | SDK oficial, sin Python embebido ni `gsutil` |
-| aws-cli | 2.x | paquete de Alpine |
-| jq, yq, git, curl, openssl, nmap, telnet | — | paquetes de Alpine |
+| kubectl | 1.37 | built from source with Go 1.27 |
+| helm | 4.3 | built from source with Go 1.27 |
+| eksctl | 0.231 | built from source with Go 1.27 |
+| gcloud + gke-gcloud-auth-plugin | 592 | official SDK, without the bundled Python or `gsutil` |
+| aws-cli | 2.x | Alpine package |
+| jq, yq, git, curl, openssl, nmap, telnet | — | Alpine packages |
 
-kubectl, helm y eksctl se compilan desde el código fuente porque los binarios oficiales
-suelen salir con versiones de Go o dependencias que ya tienen CVEs corregidos. El
-Dockerfile permite subir dependencias puntuales (`*_GO_BUMPS`) sin esperar a upstream.
+kubectl, helm and eksctl are built from source because the official binaries often
+ship with Go versions or dependencies that already have fixed CVEs. The Dockerfile
+can bump specific dependencies (`*_GO_BUMPS`) without waiting for upstream.
 
-* Base `alpine:3.24`, multi-arch (amd64/arm64)
-* Autocompletado de bash para kubectl, helm y eksctl
-* Corre como `root` (es una toolbox interactiva), con `/root` como directorio de trabajo
+* Based on `alpine:3.24`, multi-arch (amd64/arm64)
+* Bash completion for kubectl, helm and eksctl
+* Runs as `root` (it is an interactive toolbox), with `/root` as the working directory
 
 ## Tags
 
-| Tag | Contenido |
+| Tag | Content |
 |---|---|
-| `2.0.0` | versión exacta e inmutable (recomendado para scripts y CI) |
-| `2.0` | último patch de la 2.0 |
-| `2` | último minor/patch de la 2 |
-| `latest` | última versión publicada |
+| `2.0.0` | exact, immutable version (recommended for scripts and CI) |
+| `2.0` | latest 2.0 patch |
+| `2` | latest 2.x minor/patch |
+| `latest` | latest published version |
 
-Cada versión se escanea con [Trivy](https://trivy.dev) antes de publicarse. No se
-publica si tiene vulnerabilidades HIGH o CRITICAL con fix disponible. Los cambios de
-cada versión están en el [CHANGELOG](CHANGELOG.md).
+Every version is scanned with [Trivy](https://trivy.dev) before it is published, and
+is not published if it has fixable HIGH or CRITICAL vulnerabilities. Changes for each
+version are in the [CHANGELOG](CHANGELOG.md).
 
-## Uso
+## Usage
 
 Docker Hub: [https://hub.docker.com/r/brsalcedom/kubetools](https://hub.docker.com/r/brsalcedom/kubetools)
 
-**Inicio rápido**
+**Quick start**
 
 ```bash
 docker run --rm -it brsalcedom/kubetools:2
 ```
 
-**Usar tus credenciales locales**
+**Use your local credentials**
 
 ```bash
 docker run --rm -it \
@@ -52,26 +52,26 @@ docker run --rm -it \
   brsalcedom/kubetools:2
 ```
 
-**Pod de debugging en Kubernetes**
+**Debugging pod in Kubernetes**
 
 ```bash
 kubectl run --rm -it kubetools -n testing --image=brsalcedom/kubetools:2 -- bash
 ```
 
-**Construir desde el código fuente**
+**Build from source**
 
-Desde la raíz del repositorio (el contexto incluye `scripts/go-bump.sh`):
+From the repository root (the context includes `scripts/go-bump.sh`):
 
 ```bash
 docker build -t brsalcedom/kubetools:dev -f images/kubetools/Dockerfile .
 ```
 
-## Historial
+## History
 
-Desde la 2.0.0, los cambios de cada versión se registran en el [CHANGELOG](CHANGELOG.md).
+Since 2.0.0, the changes in each version are recorded in the [CHANGELOG](CHANGELOG.md).
 
-* **2.0**: base `alpine:3.24` (antes `python:alpine`, que dejaba dos Pythons en la imagen); kubectl/helm/eksctl compilados desde fuente; versiones fijadas; helm 4; `gke-gcloud-auth-plugin`; se elimina `gsutil` (usar `gcloud storage`); multi-arch (amd64/arm64). De 1.4 GB y 212 CVEs HIGH/CRITICAL a ~810 MB y 0.
-* **1.5**: downgrade de Alpine por compatibilidad con aws-cli, limpieza
+* **2.0**: `alpine:3.24` base (previously `python:alpine`, which left two Pythons in the image); kubectl/helm/eksctl built from source; pinned versions; helm 4; `gke-gcloud-auth-plugin`; `gsutil` removed (use `gcloud storage`); multi-arch (amd64/arm64). From 1.4 GB and 212 HIGH/CRITICAL CVEs down to ~810 MB and 0.
+* **1.5**: Alpine downgrade for aws-cli compatibility, cleanup
 * **1.4**: gcloud-cli
 * **1.3**: Python 3.12.5, nmap, telnet
 * **1.1**: mysql-cli

@@ -5,13 +5,13 @@
 
 ### ⚠ BREAKING CHANGES
 
-* **homelab-ci:** la imagen corre como usuario no-root `ci` (1000:1000) en vez de `root`. Ver la sección "Migrar desde 2.x" del README.
+* **homelab-ci:** the image runs as the non-root user `ci` (1000:1000) instead of `root`. See "Migrating from 2.x" in the README.
 
 ### Features
 
-* **homelab-ci:** OpenTofu, kubectl y Task compilados desde el código fuente con Go 1.27 y dependencias con CVEs actualizadas
-* **homelab-ci:** `/workspace` es del usuario `ci` y git acepta repositorios montados de otro dueño
-* imagen migrada al monorepo con versionamiento independiente por imagen y security gate con Trivy
+* **homelab-ci:** OpenTofu, kubectl and Task built from source with Go 1.27 and vulnerable dependencies bumped
+* **homelab-ci:** `/workspace` is owned by `ci` and git accepts mounted repositories owned by another user
+* image migrated to the monorepo with independent per-image versioning and a Trivy security gate
 
 ## [2.5.0](https://github.com/Brsalcedom/container-images/compare/v2.4.1...v2.5.0) (2026-03-19)
 

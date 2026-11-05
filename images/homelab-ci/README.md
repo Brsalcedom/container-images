@@ -1,46 +1,46 @@
 ## Info
 
-Imagen de CI para infraestructura como código en el homelab.
+CI image for infrastructure as code in the homelab.
 
-| Herramienta | Versión | Origen |
+| Tool | Version | Source |
 |---|---|---|
-| OpenTofu (`tofu`) | 1.13 | compilado desde el código fuente con Go 1.27 |
-| kubectl | 1.37 | compilado desde el código fuente con Go 1.27 |
-| Task (`task`) | 3.54 | compilado desde el código fuente con Go 1.27 |
-| git, curl, ssh, envsubst | — | paquetes de Debian trixie |
+| OpenTofu (`tofu`) | 1.13 | built from source with Go 1.27 |
+| kubectl | 1.37 | built from source with Go 1.27 |
+| Task (`task`) | 3.54 | built from source with Go 1.27 |
+| git, curl, ssh, envsubst | — | Debian trixie packages |
 
-* Base `debian:trixie-slim`, multi-arch (amd64/arm64)
-* Corre como usuario no-root `ci` (`1000:1000`), con `/workspace` como directorio de trabajo
-* `git` acepta repositorios montados de otro dueño (`safe.directory '*'`)
+* Based on `debian:trixie-slim`, multi-arch (amd64/arm64)
+* Runs as the non-root user `ci` (`1000:1000`), with `/workspace` as the working directory
+* `git` accepts mounted repositories owned by another user (`safe.directory '*'`)
 
 ## Tags
 
-| Tag | Contenido |
+| Tag | Content |
 |---|---|
-| `3.0.0` | versión exacta e inmutable (recomendado para pipelines) |
-| `3.0` | último patch de la 3.0 |
-| `3` | último minor/patch de la 3 |
-| `latest` | última versión publicada |
+| `3.0.0` | exact, immutable version (recommended for pipelines) |
+| `3.0` | latest 3.0 patch |
+| `3` | latest 3.x minor/patch |
+| `latest` | latest published version |
 
-Cada versión se escanea con [Trivy](https://trivy.dev) antes de publicarse. No se
-publica si tiene vulnerabilidades HIGH o CRITICAL con fix disponible. Los cambios de
-cada versión están en el [CHANGELOG](CHANGELOG.md).
+Every version is scanned with [Trivy](https://trivy.dev) before it is published, and
+is not published if it has fixable HIGH or CRITICAL vulnerabilities. Changes for each
+version are in the [CHANGELOG](CHANGELOG.md).
 
-## Uso
+## Usage
 
 Docker Hub: [https://hub.docker.com/r/brsalcedom/homelab-ci](https://hub.docker.com/r/brsalcedom/homelab-ci)
 
-**Shell con el directorio actual montado**
+**Shell with the current directory mounted**
 
 ```bash
 docker run --rm -it -v "$(pwd):/workspace" brsalcedom/homelab-ci:3 bash
 ```
 
-Si necesitas escribir en el directorio montado y tu UID no es 1000, agrega `--user "$(id -u):$(id -g)"`.
+If you need to write to the mounted directory and your UID is not 1000, add `--user "$(id -u):$(id -g)"`.
 
-**Como imagen de job en GitHub Actions**
+**As a GitHub Actions job container**
 
-El workspace del runner pertenece al UID 1001, así que hay que correr el contenedor con ese usuario:
+The runner workspace is owned by UID 1001, so the container has to run as that user:
 
 ```yaml
 jobs:
@@ -54,26 +54,26 @@ jobs:
       - run: tofu init && tofu plan
 ```
 
-**Construir desde el código fuente**
+**Build from source**
 
-Desde la raíz del repositorio (el contexto incluye `scripts/go-bump.sh`):
+From the repository root (the context includes `scripts/go-bump.sh`):
 
 ```bash
 docker build -t brsalcedom/homelab-ci:dev -f images/homelab-ci/Dockerfile .
 ```
 
-## Migrar desde 2.x
+## Migrating from 2.x
 
-La 3.0 corre como usuario `ci` en vez de `root`:
+3.0 runs as the user `ci` instead of `root`:
 
-* `apt-get install` dentro del job ya no funciona. Si necesitas paquetes extra, crea
-  una imagen derivada con `USER root` → instalar → `USER 1000:1000`.
-* Los archivos que el contenedor crea en volúmenes montados quedan con UID 1000.
-* Si dependías de `/root` (por ejemplo `~/.ssh` o `~/.kube`), el home ahora es `/home/ci`.
+* `apt-get install` inside the job no longer works. If you need extra packages, build
+  a derived image with `USER root` → install → `USER 1000:1000`.
+* Files the container creates on mounted volumes are owned by UID 1000.
+* If you relied on `/root` (e.g. `~/.ssh` or `~/.kube`), the home is now `/home/ci`.
 
-## Historial
+## History
 
-Ver el [CHANGELOG](CHANGELOG.md).
+See the [CHANGELOG](CHANGELOG.md).
 
-* **3.0**: usuario no-root `ci` (antes root); OpenTofu, kubectl y Task compilados desde el código fuente con Go actual.
-* **2.x**: Debian trixie con OpenTofu, kubectl, Task y envsubst.
+* **3.0**: non-root user `ci` (previously root); OpenTofu, kubectl and Task built from source with current Go.
+* **2.x**: Debian trixie with OpenTofu, kubectl, Task and envsubst.

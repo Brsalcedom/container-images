@@ -1,28 +1,29 @@
-# Protección de `main`
+# `main` branch protection
 
-Para que el security gate y la convención de commits sean obligatorios antes del merge,
-configura un *ruleset* (o branch protection rule) en
+To make the security gate and the commit convention mandatory before merging, set up a
+*ruleset* (or branch protection rule) under
 `Settings → Rules → Rulesets → New branch ruleset`:
 
 * **Target**: `main` (default branch)
-* **Restrict deletions** y **Block force pushes**
+* **Restrict deletions** and **Block force pushes**
 * **Require a pull request before merging**
-  * Allowed merge methods: **Squash**. El título del PR queda como mensaje de commit,
-    que es lo que lee release-please.
+  * Allowed merge methods: **Squash**. The PR title becomes the commit message, which
+    is what release-please reads.
 * **Require status checks to pass**
-  * `gate` (workflow `images`): resume toda la matrix de build + Trivy. No agregues
-    los jobs `build (<imagen>)`, porque su nombre cambia según lo que modifique el PR.
-  * `check-pr-title` (workflow `Validate PR Title`)
-  * Marca **Require branches to be up to date before merging**.
+  * `gate` (`images` workflow): summarizes the whole build + Trivy matrix. Do not add
+    the `build (<image>)` jobs, because their names change depending on what the PR
+    touches.
+  * `check-pr-title` (`Validate PR Title` workflow)
+  * Check **Require branches to be up to date before merging**.
 * **Require conversation resolution before merging**
 
-## Cómo funciona
+## How it works
 
-1. Abres un PR que modifica `images/<imagen>/` con título `fix(<imagen>): ...`.
-2. `images` construye, prueba y escanea solo las imágenes afectadas. Si hay CVEs
-   HIGH/CRITICAL con fix, `gate` falla y el merge queda bloqueado.
-3. Al hacer merge, release-please abre `chore(<imagen>): release X.Y.Z`.
-4. Al hacer merge de ese PR, `images` vuelve a escanear y publica `X.Y.Z` en Docker Hub.
+1. You open a PR that changes `images/<image>/` with the title `fix(<image>): ...`.
+2. `images` builds, tests and scans only the affected images. If there are fixable
+   HIGH/CRITICAL CVEs, `gate` fails and the merge is blocked.
+3. On merge, release-please opens `chore(<image>): release X.Y.Z`.
+4. When that PR is merged, `images` scans again and publishes `X.Y.Z` to Docker Hub.
 
-Los PRs de release necesitan el secret `RELEASE_PLEASE_TOKEN`. Con el `GITHUB_TOKEN`
-por defecto, GitHub no ejecuta workflows en esos PRs y `gate` queda pendiente.
+Release PRs need the `RELEASE_PLEASE_TOKEN` secret. With the default `GITHUB_TOKEN`,
+GitHub does not run workflows on those PRs and `gate` stays pending.

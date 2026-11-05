@@ -1,11 +1,11 @@
-# Build, security gate y publicación de las imágenes de images.yml.
+# Build, security gate and publishing for the images in images.yml.
 #
-#   pull_request       build + smoke test + Trivy de las imágenes modificadas (sin push)
-#   push a main        lo mismo y, si la versión todavía no existe en Docker Hub, publica
-#   workflow_dispatch  igual que push (en main publica; en otra rama solo valida)
-#   schedule           re-escanea las versiones ya publicadas y sube SARIF a Security
+#   pull_request       build + smoke test + Trivy for the changed images (no push)
+#   push to main       same, and publishes if the version does not exist on Docker Hub yet
+#   workflow_dispatch  same as push (publishes on main; only validates on other branches)
+#   schedule           re-scans the published versions and uploads SARIF to Security
 #
-# El check requerido en la protección de main es `gate` (resume toda la matrix).
+# The required check in the main branch protection is `gate` (summarizes the matrix).
 name: images
 
 on:
@@ -13,26 +13,26 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 10 * * 1" # lunes 10:00 UTC
+    - cron: "0 10 * * 1" # Mondays 10:00 UTC
   workflow_dispatch:
     inputs:
       image:
-        description: Imagen a procesar (vacío = todas)
+        description: Image to process (empty = all)
         required: false
         default: ""
 
 permissions:
   contents: read
 
-# Solo en PRs se cancela el run anterior. En main cada push debe procesarse: si un run
-# pendiente se descartara, sus imágenes no se publicarían.
+# Only PRs cancel the previous run. On main every push must be processed: if a pending
+# run were discarded, its images would never be published.
 concurrency:
   group: images-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 env:
-  # Imagen oficial de Trivy, versión fijada a propósito: los tags de trivy-action y
-  # setup-trivy fueron comprometidos en marzo de 2026 (GHSA-69fq-xp46-6x23).
+  # Official Trivy image, deliberately pinned: the trivy-action and setup-trivy tags
+  # were compromised in March 2026 (GHSA-69fq-xp46-6x23).
   # renovate: datasource=docker depName=aquasec/trivy
   TRIVY_VERSION: "0.69.3"
 
@@ -66,8 +66,8 @@ jobs:
       matrix:
         image: ${{ fromJSON(needs.plan.outputs.images) }}
     services:
-      # Registry efímero: la imagen se construye aquí, se prueba y escanea, y solo
-      # entonces se copia tal cual (mismo digest) a Docker Hub
+      # Ephemeral registry: the image is built here, tested and scanned, and only then
+      # copied as-is (same digest) to Docker Hub
       registry:
         image: registry:3
         ports:
@@ -78,7 +78,7 @@ jobs:
       PLATFORMS: ${{ matrix.image.platforms }}
       REPO: docker.io/brsalcedom/${{ matrix.image.name }}
       LOCAL_IMAGE: localhost:5000/${{ matrix.image.name }}:${{ github.sha }}
-      # Los PRs desde forks no tienen acceso a secrets
+      # PRs from forks have no access to secrets
       HAS_SECRETS: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
       CAN_PUBLISH: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     steps:
@@ -111,10 +111,10 @@ jobs:
           publish=false
           if [[ $CAN_PUBLISH == true ]]; then
             if .github/scripts/publish.sh exists "$REPO" "$VERSION"; then
-              echo "::notice::$REPO:$VERSION ya existe en Docker Hub: se valida pero no se publica."
+              echo "::notice::$REPO:$VERSION already exists on Docker Hub: validating only, not publishing."
             else
               publish=true
-              echo "::notice::$REPO:$VERSION no existe: se publicará si pasa el gate."
+              echo "::notice::$REPO:$VERSION does not exist: it will be published if it passes the gate."
             fi
           fi
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
@@ -124,7 +124,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
         with:
-          # Para que BuildKit pueda hacer push al registry local del service
+          # So that BuildKit can push to the local registry service
           driver-opts: network=host
 
       - name: Build
@@ -186,7 +186,7 @@ jobs:
           readme-filepath: images/${{ matrix.image.name }}/README.md
           enable-url-completion: true
 
-  # Check único para la protección de main: falla si plan o cualquier build falló
+  # Single check for the main branch protection: fails if plan or any build failed
   gate:
     needs: [plan, build]
     if: always()
@@ -197,8 +197,8 @@ jobs:
           [[ "${{ needs.plan.result }}" == success ]] || exit 1
           [[ "${{ needs.build.result }}" =~ ^(success|skipped)$ ]] || exit 1
 
-  # Las CVEs nuevas aparecen después de publicar: re-escaneo semanal de lo publicado.
-  # Si falla, corresponde un `fix(<imagen>): ...` (rebuild con parches) -> release patch.
+  # New CVEs show up after publishing: weekly re-scan of what is published.
+  # If it fails, a `fix(<image>): ...` commit (rebuild with patches) -> patch release.
   scan-published:
     name: scan-published (${{ matrix.image.name }})
     needs: plan

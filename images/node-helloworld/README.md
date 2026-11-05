@@ -1,39 +1,39 @@
 ## Info
 
-Hello World en Node.js + Express para pruebas (por ejemplo, para validar despliegues en Kubernetes).
+Node.js + Express Hello World for testing (e.g. to validate Kubernetes deployments).
 
-* Node.js 26 LTS sobre Alpine 3.24, sin npm/yarn en la imagen final y con el binario de node sin símbolos de debug
+* Node.js 26 LTS on Alpine 3.24, no npm/yarn in the final image and the node binary stripped of debug symbols
 * Express 5
-* Corre como usuario no-root (`1000:1000`) en el puerto `3000` (configurable con `PORT`)
-* Endpoints de salud para probes de Kubernetes: `/health/liveness`, `/health/readiness`, `/health/startup`
-* `HEALTHCHECK` de Docker incluido y apagado limpio con `SIGTERM`
+* Runs as a non-root user (`1000:1000`) on port `3000` (configurable with `PORT`)
+* Health endpoints for Kubernetes probes: `/health/liveness`, `/health/readiness`, `/health/startup`
+* Docker `HEALTHCHECK` included and clean shutdown on `SIGTERM`
 * Multi-arch (amd64/arm64)
 
 ## Tags
 
-| Tag | Contenido |
+| Tag | Content |
 |---|---|
-| `2.0.0` | versión exacta e inmutable (recomendado para manifiestos de Kubernetes) |
-| `2.0` | último patch de la 2.0 |
-| `2` | último minor/patch de la 2 |
-| `latest` | última versión publicada |
+| `2.0.0` | exact, immutable version (recommended for Kubernetes manifests) |
+| `2.0` | latest 2.0 patch |
+| `2` | latest 2.x minor/patch |
+| `latest` | latest published version |
 
-Cada versión se escanea con [Trivy](https://trivy.dev) antes de publicarse. No se
-publica si tiene vulnerabilidades HIGH o CRITICAL con fix disponible. Los cambios de
-cada versión están en el [CHANGELOG](CHANGELOG.md).
+Every version is scanned with [Trivy](https://trivy.dev) before it is published, and
+is not published if it has fixable HIGH or CRITICAL vulnerabilities. Changes for each
+version are in the [CHANGELOG](CHANGELOG.md).
 
-## Uso
+## Usage
 
 Docker Hub: [https://hub.docker.com/r/brsalcedom/node-helloworld](https://hub.docker.com/r/brsalcedom/node-helloworld)
 
-**Inicio rápido**
+**Quick start**
 
 ```bash
 docker run -d --name node-helloworld -p 8080:3000 brsalcedom/node-helloworld:2
 curl http://localhost:8080
 ```
 
-**Probes en Kubernetes**
+**Kubernetes probes**
 
 ```yaml
 containers:
@@ -53,17 +53,17 @@ containers:
       httpGet: { path: /health/readiness, port: 3000 }
 ```
 
-**Construir desde el código fuente**
+**Build from source**
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```bash
 docker build -t brsalcedom/node-helloworld:dev -f images/node-helloworld/Dockerfile .
 ```
 
-## Historial
+## History
 
-Desde la 2.0.0, los cambios de cada versión se registran en el [CHANGELOG](CHANGELOG.md).
+Since 2.0.0, the changes in each version are recorded in the [CHANGELOG](CHANGELOG.md).
 
-* **2.0**: Node 26 LTS, Express 5, imagen multi-stage (~49 MB comprimida), usuario no-root, puerto 3000 (antes 80), health checks y multi-arch (amd64/arm64)
-* **1.0**: versión inicial
+* **2.0**: Node 26 LTS, Express 5, multi-stage image (~49 MB compressed), non-root user, port 3000 (previously 80), health checks and multi-arch (amd64/arm64)
+* **1.0**: initial version

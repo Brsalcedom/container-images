@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Publica en Docker Hub la imagen ya construida y escaneada en el registry local, sin
-# reconstruirla: se copia el mismo índice multi-arch (mismo digest) que pasó el gate.
+# Publishes to Docker Hub the image already built and scanned in the local registry,
+# without rebuilding it: the same multi-arch index (same digest) that passed the gate
+# is copied.
 #
-# Uso:
-#   publish.sh exists <repo> <version>          exit 0 si <repo>:<version> ya existe
-#   publish.sh push <origen> <repo> <version>   publica X.Y.Z y mueve X.Y, X y latest
-#                                               solo si <version> es la más alta de su rama
-# Requiere skopeo (preinstalado en ubuntu-latest) y `docker login` previo (skopeo usa
-# ~/.docker/config.json).
+# Usage:
+#   publish.sh exists <repo> <version>          exit 0 if <repo>:<version> already exists
+#   publish.sh push <source> <repo> <version>   publishes X.Y.Z and moves X.Y, X and latest
+#                                               only if <version> is the highest in its line
+# Requires skopeo (preinstalled on ubuntu-latest) and a prior `docker login` (skopeo
+# reads ~/.docker/config.json).
 set -euo pipefail
 
 semver_re='^[0-9]+\.[0-9]+\.[0-9]+$'
@@ -17,15 +18,15 @@ exists() { # <ref>
   if out=$(skopeo inspect --raw "docker://$1" 2>&1 >/dev/null); then
     return 0
   fi
-  # Docker Hub responde "denied"/"unauthorized" para repositorios que todavía no existen
+  # Docker Hub answers "denied"/"unauthorized" for repositories that do not exist yet
   if grep -qiE 'manifest unknown|not found|denied|unauthorized' <<<"$out"; then
     return 1
   fi
-  echo "::error::No se pudo consultar $1: $out" >&2
+  echo "::error::Could not query $1: $out" >&2
   exit 2
 }
 
-# ¿Es $version la más alta entre los tags semver publicados que empiezan con $prefix?
+# Is $version the highest among the published semver tags starting with $prefix?
 is_highest() { # <prefix> <version> <tags>
   local prefix=$1 version=$2 tags=$3 max
   max=$({ grep -F "$prefix" <<<"$tags" | grep -E "^${prefix//./\\.}" || true; echo "$version"; } | sort -V | tail -n1)
@@ -38,9 +39,9 @@ case ${1:-} in
     ;;
   push)
     src=$2 repo=$3 version=$4
-    [[ $version =~ $semver_re ]] || { echo "::error::Versión inválida: $version" >&2; exit 1; }
+    [[ $version =~ $semver_re ]] || { echo "::error::Invalid version: $version" >&2; exit 1; }
     if exists "$repo:$version"; then
-      echo "::error::$repo:$version ya existe: las versiones publicadas no se sobrescriben" >&2
+      echo "::error::$repo:$version already exists: published versions are never overwritten" >&2
       exit 1
     fi
 
@@ -53,7 +54,7 @@ case ${1:-} in
     is_highest "" "$version" "$published" && tags+=(latest)
 
     for tag in "${tags[@]}"; do
-      echo "Publicando $repo:$tag"
+      echo "Publishing $repo:$tag"
       skopeo copy --all --preserve-digests --retry-times 3 --src-tls-verify=false \
         "docker://$src" "docker://$repo:$tag"
     done
@@ -61,7 +62,7 @@ case ${1:-} in
     digest=$(skopeo inspect --raw "docker://$repo:$version" | sha256sum | cut -d' ' -f1)
     if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
       {
-        echo "### Publicado \`$repo:$version\`"
+        echo "### Published \`$repo:$version\`"
         echo "Digest: \`sha256:$digest\`"
         echo
         echo "Tags: $(printf '`%s` ' "${tags[@]}")"
@@ -69,7 +70,7 @@ case ${1:-} in
     fi
     ;;
   *)
-    echo "Uso: $0 exists <repo> <version> | push <origen> <repo> <version>" >&2
+    echo "Usage: $0 exists <repo> <version> | push <source> <repo> <version>" >&2
     exit 1
     ;;
 esac

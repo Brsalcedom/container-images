@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# ---- gobuild: compila kubectl, helm y eksctl desde el código fuente ----
-# Los binarios oficiales suelen traer un Go o dependencias con CVEs ya corregidos;
-# compilarlos con el último Go (y subir dependencias puntuales) deja la imagen limpia.
-# Compila de forma cruzada en la plataforma del runner: no necesita QEMU.
+# ---- gobuild: build kubectl, helm and eksctl from source ----
+# Official release binaries often ship with a Go toolchain or dependencies that
+# already have fixed CVEs. Building them with the latest Go (and bumping specific
+# dependencies) keeps the image clean. Cross-compiles on the build platform: no QEMU.
 FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24 AS gobuild
 
 ARG TARGETOS
@@ -15,8 +15,8 @@ ARG HELM_VERSION=v4.3.1
 # renovate: datasource=github-releases depName=eksctl-io/eksctl
 ARG EKSCTL_VERSION=v0.231.0
 
-# Dependencias a subir en cada herramienta (module@version). Vaciar cuando upstream
-# publique una release que ya las incluya: go-bump.sh nunca baja de versión.
+# Dependencies to bump per tool (module@version). Clear them once upstream ships a
+# release that includes them: go-bump.sh never downgrades.
 ARG KUBECTL_GO_BUMPS="golang.org/x/net@v0.60.0 golang.org/x/text@v0.42.0"
 ARG HELM_GO_BUMPS=""
 ARG EKSCTL_GO_BUMPS="github.com/klauspost/compress@v1.18.7 golang.org/x/net@v0.60.0"
@@ -66,7 +66,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags "-s -w -X github.com/weaveworks/eksctl/pkg/version.PreReleaseID=" \
       ./cmd/eksctl
 
-# ---- gcloud: SDK sin python embebido (usa el python3 de alpine) ----
+# ---- gcloud: SDK without its bundled Python (uses Alpine's python3) ----
 FROM alpine:3.24 AS gcloud
 
 ARG TARGETARCH
@@ -77,8 +77,8 @@ SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
 RUN apk add --no-cache curl python3
 
-# Se eliminan: gsutil (reemplazado por `gcloud storage`), gcloud-crc32c (acelerador
-# opcional compilado con un Go vulnerable), backups, instaladores y caches
+# Removed: gsutil (replaced by `gcloud storage`), gcloud-crc32c (optional accelerator
+# built with a vulnerable Go), backups, installers and caches
 RUN set -eux; \
     case "$TARGETARCH" in amd64) arch=x86_64 ;; arm64) arch=arm ;; *) exit 1 ;; esac; \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-${arch}.tar.gz" \
@@ -104,7 +104,7 @@ RUN set -eux; \
 FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="kubetools" \
-      org.opencontainers.image.description="Toolbox liviano para Kubernetes, AWS y GCP desde la CLI" \
+      org.opencontainers.image.description="Lightweight CLI toolbox for Kubernetes, AWS and GCP" \
       org.opencontainers.image.source="https://github.com/Brsalcedom/container-images" \
       org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>"
 

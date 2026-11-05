@@ -1,21 +1,21 @@
 # syntax=docker/dockerfile:1
 
-# ---- deps: instala solo dependencias de producción ----
+# ---- deps: install production dependencies only ----
 FROM node:26.13.0-alpine3.24 AS deps
 WORKDIR /app
 COPY images/node-helloworld/src/package.json images/node-helloworld/src/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
     && npm cache clean --force
-# Quitar símbolos de debug del binario de node (~24MB menos)
+# Strip debug symbols from the node binary (~24MB smaller)
 RUN apk add --no-cache binutils \
     && strip /usr/local/bin/node
 
-# ---- runtime: alpine + binario de node, sin npm/yarn/corepack ----
-# La versión de alpine debe coincidir con la de la etapa deps (musl / libstdc++)
+# ---- runtime: alpine + the node binary, no npm/yarn/corepack ----
+# The Alpine version must match the deps stage (musl / libstdc++)
 FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="node-helloworld" \
-      org.opencontainers.image.description="Hello World en Node.js/Express para pruebas" \
+      org.opencontainers.image.description="Node.js/Express Hello World for testing" \
       org.opencontainers.image.source="https://github.com/Brsalcedom/container-images" \
       org.opencontainers.image.authors="Bryan Salcedo <brsalcedom@gmail.com>" \
       org.opencontainers.image.licenses="ISC"

@@ -22,7 +22,7 @@ const server = app.listen(port, (err) => {
     console.log(`App listening on port ${port}`);
 });
 
-// Node corre como PID 1 dentro del contenedor: sin esto `docker stop` espera 10s y hace SIGKILL
+// Node runs as PID 1 inside the container: without this, `docker stop` waits 10s and sends SIGKILL
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
     console.log(`${signal} received, shutting down`);

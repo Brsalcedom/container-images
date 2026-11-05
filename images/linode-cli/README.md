@@ -1,67 +1,67 @@
 ## Info
 
-Imagen liviana para usar **linode-cli** sin instalar Python en tu equipo.
+Lightweight image to use **linode-cli** without installing Python on your machine.
 
 * linode-cli 5.70
-* boto3 (necesario para `linode-cli obj`, Object Storage)
-* Alpine 3.24 + Python 3 en un virtualenv, sin pip en la imagen final
-* Corre como usuario no-root (`1000:1000`)
+* boto3 (required by `linode-cli obj`, Object Storage)
+* Alpine 3.24 + Python 3 in a virtualenv, no pip in the final image
+* Runs as a non-root user (`1000:1000`)
 * Multi-arch (amd64/arm64)
 
 ## Tags
 
-| Tag | Contenido |
+| Tag | Content |
 |---|---|
-| `2.0.0` | versión exacta e inmutable (recomendado para scripts y CI) |
-| `2.0` | último patch de la 2.0 |
-| `2` | último minor/patch de la 2 |
-| `latest` | última versión publicada |
+| `2.0.0` | exact, immutable version (recommended for scripts and CI) |
+| `2.0` | latest 2.0 patch |
+| `2` | latest 2.x minor/patch |
+| `latest` | latest published version |
 
-Cada versión se escanea con [Trivy](https://trivy.dev) antes de publicarse. No se
-publica si tiene vulnerabilidades HIGH o CRITICAL con fix disponible. Los cambios de
-cada versión están en el [CHANGELOG](CHANGELOG.md).
+Every version is scanned with [Trivy](https://trivy.dev) before it is published, and
+is not published if it has fixable HIGH or CRITICAL vulnerabilities. Changes for each
+version are in the [CHANGELOG](CHANGELOG.md).
 
-## Uso
+## Usage
 
 Docker Hub: [https://hub.docker.com/r/brsalcedom/linode-cli](https://hub.docker.com/r/brsalcedom/linode-cli)
 
-Desde la versión 2.0 el `ENTRYPOINT` es `linode-cli`, así que los argumentos van directo:
+Since 2.0 the `ENTRYPOINT` is `linode-cli`, so arguments are passed directly:
 
 ```bash
-export LINODE_CLI_TOKEN=<tu-token>
+export LINODE_CLI_TOKEN=<your-token>
 docker run --rm -e LINODE_CLI_TOKEN brsalcedom/linode-cli:2 linodes list
 ```
 
-**Alias para usarla como si estuviera instalada**
+**Alias to use it as if it were installed**
 
 ```bash
 alias linode-cli='docker run --rm -it -e LINODE_CLI_TOKEN brsalcedom/linode-cli:2'
 linode-cli regions list
 ```
 
-**Usar tu configuración existente** (`~/.config/linode-cli`)
+**Use your existing configuration** (`~/.config/linode-cli`)
 
 ```bash
 docker run --rm -it -v ~/.config/linode-cli:/home/linode/.config/linode-cli:ro brsalcedom/linode-cli:2 linodes list
 ```
 
-**Abrir una shell**
+**Open a shell**
 
 ```bash
 docker run --rm -it --entrypoint sh brsalcedom/linode-cli:2
 ```
 
-**Construir desde el código fuente**
+**Build from source**
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```bash
 docker build -t brsalcedom/linode-cli:dev -f images/linode-cli/Dockerfile .
 ```
 
-## Historial
+## History
 
-Desde la 2.0.0, los cambios de cada versión se registran en el [CHANGELOG](CHANGELOG.md).
+Since 2.0.0, the changes in each version are recorded in the [CHANGELOG](CHANGELOG.md).
 
-* **2.0**: linode-cli 5.70, Python 3.14 sobre Alpine 3.24, `boto` (obsoleto) reemplazado por `boto3`, `ENTRYPOINT linode-cli`, usuario no-root y multi-arch (amd64/arm64)
-* **1.0**: linode-cli 5.21 sobre Python 3.10
+* **2.0**: linode-cli 5.70, Python 3.14 on Alpine 3.24, deprecated `boto` replaced by `boto3`, `ENTRYPOINT linode-cli`, non-root user and multi-arch (amd64/arm64)
+* **1.0**: linode-cli 5.21 on Python 3.10

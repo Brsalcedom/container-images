@@ -19,7 +19,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "ARG/variables con comentario `# renovate: datasource=... depName=...` en Dockerfiles y workflows",
+      "description": "ARGs/variables annotated with `# renovate: datasource=... depName=...` in Dockerfiles and workflows",
       "managerFilePatterns": [
         "/(^|/)Dockerfile$/",
         "/^\\.github/workflows/.+\\.ya?ml$/"
@@ -31,17 +31,17 @@
   ],
   "packageRules": [
     {
-      "description": "Cambios dentro de una imagen: commit `fix(...)` para que release-please publique un patch de esa imagen",
+      "description": "Changes inside an image: `fix(...)` commit so release-please cuts a patch release of that image",
       "matchFileNames": ["images/**"],
       "semanticCommitType": "fix"
     },
     {
-      "description": "Workflows y tooling del repo: no generan release de imágenes",
+      "description": "Repository workflows and tooling: no image release",
       "matchFileNames": [".github/**", "scripts/**"],
       "semanticCommitType": "chore"
     },
     {
-      "description": "Docker base images - patch/pin/digest (revisión manual)",
+      "description": "Docker base images - patch/pin/digest (manual review)",
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["patch", "pin", "digest"],
       "automerge": false,
@@ -65,7 +65,7 @@
       "schedule": ["before 6am on monday"]
     },
     {
-      "description": "Herramientas compiladas desde fuente (ARG *_VERSION)",
+      "description": "Tools built from source (ARG *_VERSION)",
       "matchManagers": ["custom.regex"],
       "matchFileNames": ["images/**"],
       "schedule": ["before 6am on monday"]

@@ -1,29 +1,30 @@
-# Imágenes publicadas en Docker Hub (docker.io/brsalcedom/<nombre>): configuración de build.
+# Images published to Docker Hub (docker.io/brsalcedom/<name>): build settings.
 #
-# Flujo:
-#   1. PR que toca images/<nombre>/: se construye, se prueba y se escanea con Trivy.
-#      Si hay vulnerabilidades HIGH/CRITICAL con fix disponible, el check `gate` falla.
-#   2. Merge a main: release-please abre (o actualiza) un PR de release por imagen que
-#      sube su versión y actualiza images/<nombre>/CHANGELOG.md según los commits
+# Flow:
+#   1. A PR that touches images/<name>/: the image is built, tested and scanned with
+#      Trivy. If it has fixable HIGH/CRITICAL vulnerabilities, the `gate` check fails.
+#   2. Merge to main: release-please opens (or updates) one release PR per image that
+#      bumps its version and updates images/<name>/CHANGELOG.md based on the commits
 #      (fix -> patch, feat -> minor, `!`/BREAKING CHANGE -> major).
-#   3. Merge del PR de release: la imagen se vuelve a construir y escanear y, si pasa,
-#      se publica como `X.Y.Z`, `X.Y`, `X` y `latest`. Una versión que ya existe en
-#      Docker Hub nunca se sobrescribe.
+#   3. Merging the release PR: the image is built and scanned again and, if it passes,
+#      published as `X.Y.Z`, `X.Y`, `X` and `latest`. A version that already exists on
+#      Docker Hub is never overwritten.
 #
-# La versión NO va aquí: vive en .release-please-manifest.json y la sube release-please.
+# The version does NOT live here: it is in .release-please-manifest.json and
+# release-please bumps it.
 #
-# Imagen nueva: crear images/<nombre>/{Dockerfile,Dockerfile.dockerignore,README.md},
-# agregarla aquí, en release-please-config.json (packages) y en
-# .release-please-manifest.json con su versión inicial.
+# New image: create images/<name>/{Dockerfile,Dockerfile.dockerignore,README.md,CHANGELOG.md},
+# add it here, to release-please-config.json (packages) and to
+# .release-please-manifest.json with its initial version.
 #
-# Campos por imagen:
-#   platforms        (opcional)    por defecto linux/amd64,linux/arm64
-#   test             (opcional)    smoke test; se ejecuta con `sh -c` dentro de la imagen
-#                                  (con --entrypoint sh, así que no pasa por el ENTRYPOINT)
-#   free-disk-space  (opcional)    libera ~30GB en el runner antes de construir
-#   cache            (opcional)    usar el caché de GitHub Actions entre ejecuciones (por
-#                                  defecto true; desactivar en imágenes de varios GB, el
-#                                  límite es 10GB por repositorio)
+# Per-image fields:
+#   platforms        (optional)  defaults to linux/amd64,linux/arm64
+#   test             (optional)  smoke test; runs with `sh -c` inside the image
+#                                (with --entrypoint sh, so it bypasses the ENTRYPOINT)
+#   free-disk-space  (optional)  frees ~30GB on the runner before building
+#   cache            (optional)  use the GitHub Actions cache across runs (default true;
+#                                disable for multi-GB images, the limit is 10GB per
+#                                repository)
 
 images:
   homelab-ci:
