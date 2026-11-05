@@ -86,7 +86,7 @@ else
   echo "Changed files:"; sed 's/^/  /' <<<"$changed"
 
   # Changes to the pipeline, shared scripts or the scan policy affect every image
-  if grep -qE '^(\.github/workflows/images\.yml|\.github/scripts/|scripts/|\.trivyignore\.yaml|\.hadolint\.yaml)' <<<"$changed"; then
+  if grep -qE '^(\.github/workflows/images\.yml|\.github/scripts/|scripts/|\.trivyignore\.(yaml|rego)|\.hadolint\.yaml)' <<<"$changed"; then
     selected=$all
   # A new registry has to be backfilled with the current version of every image
   elif [[ $(registries_at "$BASE_SHA") != "$(registries_at WORKTREE)" ]]; then

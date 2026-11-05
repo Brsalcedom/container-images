@@ -29,6 +29,7 @@ release-please-config.json  # one release-please package per image
 scripts/go-bump.sh          # bumps vulnerable Go dependencies when building tools
 .github/scripts/            # plan.sh (which images to process), metadata.sh, scan.sh (gate), publish.sh
 .trivyignore.yaml           # CVE exceptions, with justification and expiry
+.trivyignore.rego           # policy for findings never exploitable in a container
 .hadolint.yaml              # Dockerfile lint rules
 AGENTS.md                   # guidelines for contributors and AI agents
 ```
@@ -97,6 +98,8 @@ step in the workflow.
   platform of the image.
 * Exceptions only in [`.trivyignore.yaml`](.trivyignore.yaml), each with a `statement`
   and an `expired_at`. Once it expires, the gate blocks again.
+* [`.trivyignore.rego`](.trivyignore.rego) drops whole classes of findings that are never
+  exploitable in a container (kernel headers in `linux-libc-dev`).
 
 ## Repository settings
 

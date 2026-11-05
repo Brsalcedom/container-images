@@ -34,7 +34,8 @@ published to Docker Hub (`docker.io/brsalcedom/<image>`) and GitHub Container Re
 | `.github/scripts/scan.sh` | security gate (Trivy) |
 | `.github/scripts/publish.sh` | copies the scanned digest to every registry, moves tags, checks registries are in sync |
 | `.github/workflows/images.yml` | pipeline: lint, build, smoke test, gate, publish, weekly re-scan |
-| `.trivyignore.yaml` | CVE exceptions |
+| `.trivyignore.yaml` | CVE exceptions, with justification and expiry |
+| `.trivyignore.rego` | Trivy policy for classes of findings never exploitable in a container |
 | `.hadolint.yaml` | Dockerfile lint rules |
 
 ## Language and tone
@@ -186,6 +187,12 @@ Bump helm to 4.3.2 to fix CVE-2026-1234 (HIGH) in `golang.org/x/net`.
   exploitable or why there is no reasonable fix), `paths` as narrow as possible and an
   `expired_at` at most 90 days out. Adding an exception requires explicit approval
   from the repository owner.
+* `.trivyignore.rego` is only for whole classes of findings that can never be
+  exploitable inside a container (today: `linux-libc-dev`, kernel headers). Keep each
+  rule as narrow as possible and documented; changes also require owner approval.
+* Rolling distros (Kali) lag behind their upstream: a fix may exist in Debian testing
+  but not yet in Kali. Time-box those with a short `expired_at` (30 days) instead of
+  mixing repositories.
 * Trivy runs from the official image at a pinned version (`TRIVY_VERSION` in the
   workflow), not through `aquasecurity/trivy-action` or `setup-trivy`, because their
   tags were compromised in March 2026. GitHub Actions are pinned by SHA (Renovate
@@ -220,7 +227,7 @@ linters, builds and local scans, and draft commits and PR descriptions.
 * `git commit`, `git push`, opening, editing or merging PRs, and creating tags or
   releases.
 * Anything that publishes to Docker Hub or triggers workflows (`workflow_dispatch`).
-* Adding or extending exceptions in `.trivyignore.yaml`, or changing gate severities
+* Adding or extending exceptions in `.trivyignore.yaml` or `.trivyignore.rego`, or changing gate severities
   or flags.
 * Changing versions in `.release-please-manifest.json`, `bootstrap-sha` or the
   release-please configuration.

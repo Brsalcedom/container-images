@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Security gate: scans an image with Trivy on every platform and fails if it finds
-# HIGH or CRITICAL vulnerabilities with a fix available (except those in
-# .trivyignore.yaml).
+# HIGH or CRITICAL vulnerabilities with a fix available (except those excluded by
+# .trivyignore.yaml or .trivyignore.rego).
 #
 # Usage: scan.sh <image> <comma-separated platforms>
 # Inputs (environment variables):
@@ -35,6 +35,7 @@ common=(
   --cache-backend memory
   --scanners vuln
   --ignorefile .trivyignore.yaml
+  --ignore-policy .trivyignore.rego
   --timeout 30m
   --quiet
 )
