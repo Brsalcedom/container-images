@@ -24,7 +24,7 @@ published to Docker Hub as `docker.io/brsalcedom/<image>`.
 | `images/<image>/Dockerfile.dockerignore` | what enters the context (everything excluded except the image folder and any shared files it uses) |
 | `images/<image>/README.md` | documentation; published as the Docker Hub description |
 | `images/<image>/CHANGELOG.md` | maintained by release-please; do not edit by hand except when adding the image |
-| `images.yml` | per-image build settings: `platforms`, `test`, `free-disk-space`, `cache` |
+| `images.yml` | per-image build settings: `platforms`, `test`, `free-disk-space`, `cache`, `sbom` |
 | `.release-please-manifest.json` | current version of each image (single source of truth) |
 | `release-please-config.json` | one release-please package per image |
 | `scripts/go-bump.sh` | bumps vulnerable Go dependencies when building tools from source |

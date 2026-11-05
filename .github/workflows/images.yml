@@ -140,7 +140,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.url=https://hub.docker.com/r/brsalcedom/${{ matrix.image.name }}
           provenance: mode=max
-          sbom: true
+          sbom: ${{ matrix.image.sbom }}
           cache-from: ${{ matrix.image.cache && format('type=gha,scope={0}', matrix.image.name) || '' }}
           cache-to: ${{ matrix.image.cache && format('type=gha,scope={0},mode=max', matrix.image.name) || '' }}
 

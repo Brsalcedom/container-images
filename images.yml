@@ -25,6 +25,8 @@
 #   cache            (optional)  use the GitHub Actions cache across runs (default true;
 #                                disable for multi-GB images, the limit is 10GB per
 #                                repository)
+#   sbom             (optional)  attach an SBOM attestation to the image (default true;
+#                                disable when it exceeds BuildKit's 80MB attestation limit)
 
 images:
   homelab-ci:
@@ -50,6 +52,8 @@ images:
     platforms: linux/amd64
     free-disk-space: true
     cache: false
+    # Kali + metasploit + SecLists produce an SBOM over BuildKit's 80MB limit
+    sbom: false
     test: >-
       nmap --version && nxc smb --help > /dev/null && kerbrute version &&
       msfconsole --version && impacket-secretsdump -h > /dev/null
