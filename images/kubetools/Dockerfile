@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
 # ---- gobuild: build kubectl, helm and eksctl from source ----
 # Official release binaries often ship with a Go toolchain or dependencies that
 # already have fixed CVEs. Building them with the latest Go (and bumping specific
 # dependencies) keeps the image clean. Cross-compiles on the build platform: no QEMU.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24 AS gobuild
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS gobuild
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -67,7 +67,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       ./cmd/eksctl
 
 # ---- gcloud: SDK without its bundled Python (uses Alpine's python3) ----
-FROM alpine:3.24 AS gcloud
+FROM alpine:3.24@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a AS gcloud
 
 ARG TARGETARCH
 # https://cloud.google.com/sdk/docs/release-notes
@@ -101,7 +101,7 @@ RUN set -eux; \
     find /opt/google-cloud-sdk -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 # ---- runtime ----
-FROM alpine:3.24
+FROM alpine:3.24@sha256:3f4d6b32e26703c6082839234f43769d5046b3ac7c910033911d1e71d8cd630a
 
 LABEL org.opencontainers.image.title="kubetools" \
       org.opencontainers.image.description="Lightweight CLI toolbox for Kubernetes, AWS and GCP" \
