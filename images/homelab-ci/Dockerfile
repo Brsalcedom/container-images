@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
 # =========================
 # Stage 1: build Go tools from source
@@ -6,7 +6,7 @@
 # Official release binaries often ship with a Go toolchain or dependencies that
 # already have fixed CVEs. Building them with the latest Go (and bumping specific
 # dependencies) keeps the image clean. Cross-compiles on the build platform: no QEMU.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24 AS gobuild
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS gobuild
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -71,7 +71,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # =========================
 # Stage 2: CI
 # =========================
-FROM debian:trixie-slim AS ci
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS ci
 
 LABEL org.opencontainers.image.title="homelab-ci" \
       org.opencontainers.image.description="CI image with OpenTofu, kubectl, Task, git, curl, ssh and envsubst" \
