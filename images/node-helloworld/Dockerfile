@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
 # ---- deps: install production dependencies only ----
-FROM node:26.13.0-alpine3.24 AS deps
+FROM node:26.13.0-alpine3.24@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS deps
 WORKDIR /app
 COPY images/node-helloworld/src/package.json images/node-helloworld/src/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
@@ -12,7 +12,7 @@ RUN apk add --no-cache binutils \
 
 # ---- runtime: alpine + the node binary, no npm/yarn/corepack ----
 # The Alpine version must match the deps stage (musl / libstdc++)
-FROM alpine:3.24
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 LABEL org.opencontainers.image.title="node-helloworld" \
       org.opencontainers.image.description="Node.js/Express Hello World for testing" \
